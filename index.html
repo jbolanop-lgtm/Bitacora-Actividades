@@ -3,27 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bitácora · Control de Tareas Diarias</title>
-<meta name="description" content="Aplicación para registrar actividades, definir su frecuencia de revisión y verificar su cumplimiento mediante un checklist y un panel de reportes.">
-<link rel="manifest" href="manifest.json">
+<title>Bitácora · Control de Tareas</title>
+<meta name="description" content="Registra actividades, verifica su cumplimiento y consulta reportes en una sola vista. Las métricas cuentan solo días hábiles (lunes a viernes).">
 <meta name="theme-color" content="#12151b">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Bitácora">
-<link rel="apple-touch-icon" href="icon-192.png">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg:#12151b;
     --bg-grain: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.025) 1px, transparent 0);
     --panel:#1b1f28;
     --panel-alt:#222736;
-    --panel-border: #2c3140;
+    --panel-border:#2c3140;
+    --field:#151822;
     --ink:#e9e6dd;
     --ink-dim:#a3a7b3;
     --ink-faint:#6b7080;
@@ -37,124 +33,229 @@
     --success:#57b788;
     --stamp-ink:#1f7a5c;
     --radius:10px;
-    --shadow: 0 10px 30px -12px rgba(0,0,0,0.55);
-    --mono: 'IBM Plex Mono', ui-monospace, monospace;
-    --display: 'Space Grotesk', ui-sans-serif, sans-serif;
-    --body: 'Inter', ui-sans-serif, sans-serif;
+    --shadow:0 10px 30px -12px rgba(0,0,0,0.55);
+    --mono:'IBM Plex Mono', ui-monospace, monospace;
+    --display:'Space Grotesk', ui-sans-serif, sans-serif;
+    --body:'Inter', ui-sans-serif, system-ui, sans-serif;
   }
 
   *,*::before,*::after{ box-sizing:border-box; }
-  html{ scroll-behavior:smooth; }
   body{
-    margin:0; min-height:100vh;
+    margin:0; min-height:100vh; display:flex; flex-direction:column;
     background-color:var(--bg); background-image:var(--bg-grain); background-size:22px 22px;
     color:var(--ink); font-family:var(--body); line-height:1.5; -webkit-font-smoothing:antialiased;
   }
-  a{ color:inherit; }
   h1,h2,h3{ font-family:var(--display); margin:0; letter-spacing:-0.01em; }
   button{ font-family:inherit; }
   input,select,textarea{ font-family:inherit; font-size:0.95rem; }
   :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  [hidden]{ display:none !important; }
   .visually-hidden{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+  kbd{ font-family:var(--mono); font-size:0.7rem; border:1px solid var(--panel-border); border-bottom-width:2px; border-radius:4px; padding:0.05rem 0.35rem; color:var(--ink-dim); background:var(--panel); }
+  svg.i{ width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
 
-  /* ---------- header / tabs ---------- */
+  /* ================= Header + selector de vista ================= */
   .app-header{
-    position:sticky; top:0; z-index:30;
-    background:linear-gradient(180deg, rgba(18,21,27,0.97), rgba(18,21,27,0.9));
-    backdrop-filter:blur(6px); border-bottom:1px solid var(--panel-border); padding:0.9rem 1.25rem;
+    position:sticky; top:0; z-index:30; flex-shrink:0;
+    background:rgba(18,21,27,0.95); backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--panel-border); padding:0.6rem 1.25rem;
   }
-  .header-inner{ max-width:1180px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
-  .brand{ display:flex; align-items:center; gap:0.65rem; }
+  .header-inner{ max-width:1680px; margin:0 auto; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:1rem; }
+  .brand{ display:flex; align-items:center; gap:0.65rem; min-width:0; }
   .brand-mark{
-    width:38px; height:38px; border-radius:8px;
+    width:36px; height:36px; border-radius:8px; flex-shrink:0;
     background:repeating-linear-gradient(135deg, rgba(227,179,79,0.16) 0 2px, transparent 2px 8px), linear-gradient(160deg, var(--panel-alt), var(--panel));
     border:1px solid var(--panel-border); display:flex; align-items:center; justify-content:center;
-    font-family:var(--display); font-weight:700; color:var(--accent); font-size:1.1rem; flex-shrink:0;
+    font-family:var(--display); font-weight:700; color:var(--accent); font-size:1rem;
   }
-  .brand-text h1{ font-size:1.05rem; font-weight:700; }
-  .brand-text p{ margin:0; font-size:0.72rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-faint); font-family:var(--mono); }
-  .header-clock{ font-family:var(--mono); font-size:0.82rem; color:var(--ink-dim); text-align:right; line-height:1.35; }
-  .header-clock strong{ color:var(--ink); display:block; font-size:0.95rem; }
-  #installBtn{ padding:0.5rem 0.85rem; font-size:0.78rem; }
+  .brand-text h1{ font-size:1rem; font-weight:700; white-space:nowrap; }
+  .brand-text p{ margin:0; font-size:0.66rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-faint); font-family:var(--mono); white-space:nowrap; }
+  .header-right{ display:flex; align-items:center; gap:1rem; justify-content:flex-end; }
+  .header-clock{ font-family:var(--mono); font-size:0.78rem; color:var(--ink-dim); text-align:right; line-height:1.3; }
+  .header-clock strong{ color:var(--ink); display:block; font-size:0.92rem; }
+  .header-clock span{ text-transform:capitalize; }
 
-  .tabs{ max-width:1180px; margin:0.9rem auto 0; padding:0 1.25rem; display:flex; gap:0.4rem; }
-  .tab-btn{
-    appearance:none; border:1px solid var(--panel-border); background:var(--panel); color:var(--ink-dim);
-    padding:0.55rem 1rem; border-radius:8px 8px 0 0; font-size:0.82rem; font-weight:600; cursor:pointer;
-    letter-spacing:0.02em; display:flex; align-items:center; gap:0.45rem; border-bottom:none;
-    transition:color .15s ease, background .15s ease;
+  .view-switch{
+    display:flex; gap:0.25rem; padding:0.25rem; border-radius:12px;
+    background:var(--panel); border:1px solid var(--panel-border);
   }
-  .tab-btn .tab-num{ font-family:var(--mono); font-size:0.7rem; color:var(--accent-dim); }
-  .tab-btn:hover{ color:var(--ink); }
-  .tab-btn[aria-selected="true"]{ background:var(--panel-alt); color:var(--ink); position:relative; }
-  .tab-btn[aria-selected="true"] .tab-num{ color:var(--accent); }
-  .tab-btn[aria-selected="true"]::after{ content:""; position:absolute; left:0; right:0; bottom:-1px; height:2px; background:var(--accent); }
-
-  main{
-    max-width:1180px; margin:0 auto; padding:1.5rem 1.25rem 4rem;
-    background:var(--panel-alt); border:1px solid var(--panel-border); border-top:none;
-    border-radius:0 0 var(--radius) var(--radius); min-height:60vh;
+  .vs-btn{
+    appearance:none; border:none; background:transparent; color:var(--ink-dim); cursor:pointer;
+    height:40px; min-width:46px; padding:0 0.7rem; border-radius:9px; position:relative;
+    display:flex; align-items:center; justify-content:center; gap:0.45rem; font-size:0.8rem; font-weight:600;
+    transition:background .15s ease, color .15s ease;
   }
+  .vs-btn:hover{ color:var(--ink); background:var(--panel-alt); }
+  .vs-btn[aria-pressed="true"]{ background:rgba(227,179,79,0.12); color:var(--accent); }
+  .vs-label{ display:none; }
+  .vs-btn.vs-add{ background:var(--accent); color:#221a08; }
+  .vs-btn.vs-add:hover{ background:var(--accent); box-shadow:0 6px 16px -6px rgba(227,179,79,0.6); }
+  .vs-badge{
+    position:absolute; top:3px; right:3px; min-width:16px; height:16px; padding:0 4px; border-radius:99px;
+    background:var(--danger); color:#fff; font-family:var(--mono); font-size:0.6rem; font-weight:600;
+    display:flex; align-items:center; justify-content:center; line-height:1;
+  }
+  
 
-  .view{ display:none; animation:fade .25s ease; }
-  .view.is-active{ display:block; }
+  .sync-pill{
+    display:inline-flex; align-items:center; gap:0.45rem; font-family:var(--mono); font-size:0.68rem;
+    padding:0.28rem 0.6rem; border-radius:99px; border:1px solid var(--panel-border); color:var(--ink-dim); white-space:nowrap;
+  }
+  .sync-pill::before{ content:""; width:7px; height:7px; border-radius:50%; background:var(--ink-faint); }
+  .sync-pill.ok::before{ background:var(--success); }
+  .sync-pill.saving::before{ background:var(--accent); animation:pulse 1s ease-in-out infinite; }
+  .sync-pill.offline{ color:var(--warn); border-color:#7a5c2e; }
+  .sync-pill.offline::before{ background:var(--warn); }
+  @keyframes pulse{ 50%{ opacity:0.3; } }
+
+  /* ================= Vista principal ================= */
+  .workspace{
+    flex:1; width:100%; max-width:1180px; margin:0 auto; padding:1rem 1.25rem 2rem;
+    display:grid; gap:1rem; grid-template-columns:minmax(0,1fr); align-content:start;
+  }
+  .panel{
+    container-type:inline-size; position:relative; min-width:0;
+    background:var(--panel-alt); border:1px solid var(--panel-border); border-radius:12px;
+    padding:0 1.15rem 1.4rem;
+    animation:fade .22s ease;
+  }
   @keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
-
-  .view-head{ margin-bottom:1.4rem; }
-  .view-eyebrow{ font-family:var(--mono); font-size:0.72rem; text-transform:uppercase; letter-spacing:0.12em; color:var(--accent); margin:0 0 0.35rem; }
-  .view-head h2{ font-size:1.4rem; }
-  .view-head p{ margin:0.4rem 0 0; color:var(--ink-dim); font-size:0.92rem; max-width:60ch; }
-
-  .section-title{
-    font-size:0.95rem; font-weight:700; margin:2rem 0 0.9rem; display:flex; align-items:center; gap:0.6rem;
+  .panel-head{
+    display:flex; align-items:center; gap:0.7rem; flex-wrap:wrap;
+    margin:0 -1.15rem 1rem; padding:0.85rem 1.15rem 0.75rem;
   }
-  .section-title:first-of-type{ margin-top:0; }
-  .section-title .n{ font-family:var(--mono); font-size:0.72rem; color:var(--accent-dim); border:1px solid var(--panel-border); border-radius:5px; padding:0.1rem 0.4rem; }
-  .section-sub{ font-size:0.8rem; color:var(--ink-faint); margin:-0.5rem 0 0.9rem; }
+  .panel-icon{
+    width:34px; height:34px; border-radius:9px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+    background:rgba(227,179,79,0.1); color:var(--accent); border:1px solid var(--accent-dim);
+  }
+  .panel-titles{ flex:1; min-width:0; }
+  .panel-titles h2{ font-size:1.08rem; }
+  .panel-titles p{ margin:0; font-size:0.76rem; color:var(--ink-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  @media (min-width: 761px){ .vs-label{ display:inline; } }
 
-  /* ---------- shared card / form ---------- */
-  .card{ background:var(--panel); border:1px solid var(--panel-border); border-radius:var(--radius); padding:1.25rem; }
-  .task-form{ display:grid; grid-template-columns:1.4fr 1fr; gap:1rem; }
-  .field{ display:flex; flex-direction:column; gap:0.4rem; }
+  /* ================= Ventana emergente: agregar actividad ================= */
+  .add-dialog{
+    width:min(660px, calc(100vw - 2rem)); max-width:none; max-height:calc(100vh - 2rem); padding:0;
+    border:1px solid var(--panel-border); border-radius:14px; background:var(--panel-alt); color:var(--ink);
+    box-shadow:0 30px 80px -20px rgba(0,0,0,0.75); overflow:hidden;
+  }
+  .add-dialog[open]{ display:flex; flex-direction:column; animation:dlgIn .2s ease; }
+  @keyframes dlgIn{ from{ opacity:0; transform:translateY(10px) scale(0.98); } to{ opacity:1; transform:none; } }
+  .add-dialog::backdrop{ background:rgba(8,10,14,0.68); backdrop-filter:blur(2px); }
+  .dlg-head{ display:flex; align-items:center; gap:0.7rem; padding:0.9rem 1.1rem; border-bottom:1px solid var(--panel-border); flex-shrink:0; }
+  .dlg-body{ overflow-y:auto; padding:1rem 1.1rem 1.3rem; container-type:inline-size; overscroll-behavior:contain; }
+  .dlg-tabs-unused{ display:flex; gap:0.3rem; margin-bottom:1rem; background:var(--panel); border:1px solid var(--panel-border); border-radius:9px; padding:0.2rem; }
+  .dlg-tab{ flex:1; appearance:none; border:none; background:transparent; color:var(--ink-dim); padding:0.45rem; border-radius:7px; font-weight:600; font-size:0.8rem; cursor:pointer; }
+  .dlg-tab[aria-selected="true"]{ background:var(--panel-alt); color:var(--accent); }
+
+  .section-title{ font-size:0.92rem; font-weight:700; margin:1.7rem 0 0.8rem; display:flex; align-items:center; gap:0.6rem; }
+  .section-title .n{ font-family:var(--mono); font-size:0.7rem; color:var(--accent-dim); border:1px solid var(--panel-border); border-radius:5px; padding:0.1rem 0.4rem; }
+  .section-sub{ font-size:0.78rem; color:var(--ink-faint); margin:-0.45rem 0 0.8rem; }
+
+  /* ================= Formulario ================= */
+  .card{ background:var(--panel); border:1px solid var(--panel-border); border-radius:var(--radius); padding:1.1rem; }
+  .task-form{ display:grid; grid-template-columns:1fr; gap:0.9rem; }
+  @container (min-width: 560px){ .task-form{ grid-template-columns:1fr 1fr; } }
+  .task-form.editing{ border-color:var(--accent-dim); box-shadow:0 0 0 1px var(--accent-dim) inset; }
+  .edit-banner{
+    grid-column:1/-1; display:flex; align-items:center; justify-content:space-between; gap:0.8rem; flex-wrap:wrap;
+    font-size:0.82rem; color:var(--accent); background:rgba(227,179,79,0.07); border:1px solid var(--accent-dim);
+    border-radius:7px; padding:0.5rem 0.75rem;
+  }
+  .field{ display:flex; flex-direction:column; gap:0.4rem; min-width:0; }
   .field.span-full{ grid-column:1 / -1; }
-  .field label{ font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-faint); }
+  .field label, .field legend{ font-size:0.72rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-faint); padding:0; }
+  fieldset.field{ border:none; margin:0; padding:0; }
   .field input, .field select, .field textarea{
-    background:#151822; border:1px solid var(--panel-border); color:var(--ink);
-    padding:0.6rem 0.7rem; border-radius:7px; outline-offset:2px;
+    background:var(--field); border:1px solid var(--panel-border); color:var(--ink);
+    padding:0.58rem 0.7rem; border-radius:7px; width:100%;
   }
+  .field input[aria-invalid="true"]{ border-color:var(--danger); }
   .field input::placeholder, .field textarea::placeholder{ color:var(--ink-faint); }
-  .field textarea{ resize:vertical; min-height:64px; }
-  .field-hint{ font-size:0.75rem; color:var(--ink-faint); }
+  .field textarea{ resize:vertical; min-height:58px; }
+  .field-hint{ font-size:0.75rem; color:var(--ink-faint); margin:0; }
+  .field-error{ font-size:0.75rem; color:var(--danger); margin:0; }
+  .field-row{ display:flex; justify-content:space-between; gap:0.5rem; }
+  .char-count{ font-family:var(--mono); font-size:0.7rem; color:var(--ink-faint); }
+
+  .chips{ display:grid; grid-template-columns:repeat(auto-fit, minmax(100px, 1fr)); gap:0.45rem; }
+  .chip{ position:relative; cursor:pointer; }
+  .chip input{ position:absolute; opacity:0; pointer-events:none; }
+  .chip span{
+    display:flex; flex-direction:column; gap:0.05rem; padding:0.5rem 0.65rem; border-radius:8px; height:100%;
+    border:1px solid var(--panel-border); background:var(--field); font-size:0.83rem; font-weight:600; color:var(--ink-dim);
+    transition:border-color .12s ease, background .12s ease, color .12s ease;
+  }
+  .chip span{ text-transform:none; letter-spacing:0; }
+  .chip small{ font-weight:400; font-size:0.68rem; color:var(--ink-faint); font-family:var(--mono); }
+  .chip:hover span{ border-color:var(--ink-faint); color:var(--ink); }
+  .chip input:checked + span{ border-color:var(--accent); background:rgba(227,179,79,0.08); color:var(--ink); }
+  .chip input:focus-visible + span{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  .schedule-preview{
+    align-self:end; font-size:0.79rem; color:var(--ink-dim); background:var(--field); border:1px dashed var(--panel-border);
+    border-radius:7px; padding:0.55rem 0.75rem; min-height:42px; display:flex; align-items:center;
+  }
+  .schedule-preview strong{ color:var(--accent); font-weight:600; margin-right:0.3rem; }
 
   .btn{
-    appearance:none; border:none; border-radius:7px; padding:0.65rem 1.1rem; font-weight:600; font-size:0.85rem;
-    cursor:pointer; display:inline-flex; align-items:center; gap:0.5rem;
-    transition:transform .12s ease, box-shadow .12s ease, background .12s ease;
+    appearance:none; border:none; border-radius:7px; padding:0.62rem 1.05rem; font-weight:600; font-size:0.84rem;
+    cursor:pointer; display:inline-flex; align-items:center; gap:0.5rem; justify-content:center;
+    transition:transform .12s ease, box-shadow .12s ease, background .12s ease, color .12s ease;
   }
   .btn:active{ transform:translateY(1px); }
+  .btn-sm{ padding:0.38rem 0.7rem; font-size:0.77rem; }
   .btn-primary{ background:var(--accent); color:#221a08; }
   .btn-primary:hover{ box-shadow:0 6px 16px -6px rgba(227,179,79,0.55); }
   .btn-ghost{ background:transparent; border:1px solid var(--panel-border); color:var(--ink-dim); }
   .btn-ghost:hover{ color:var(--ink); border-color:var(--ink-faint); }
-  .btn-danger-ghost{ background:transparent; border:1px solid rgba(229,89,95,0.35); color:var(--danger); }
-  .btn-danger-ghost:hover{ background:rgba(229,89,95,0.08); }
-  .form-actions{ grid-column:1/-1; display:flex; justify-content:flex-end; gap:0.6rem; margin-top:0.3rem; }
-
-  .freq-legend{ margin-top:1.1rem; display:flex; flex-wrap:wrap; gap:0.5rem 1.1rem; font-size:0.78rem; color:var(--ink-faint); font-family:var(--mono); }
-  .freq-legend span{ color:var(--accent); }
-
-  .registry{ margin-top:1.5rem; }
-  .registry h3{ font-size:0.95rem; margin-bottom:0.7rem; color:var(--ink-dim); }
-  .task-row{
-    display:flex; align-items:center; gap:0.9rem; padding:0.7rem 0.85rem;
-    border:1px solid var(--panel-border); border-radius:8px; background:#151822; margin-bottom:0.55rem;
+  .icon-btn{
+    appearance:none; width:34px; height:34px; border-radius:7px; border:1px solid var(--panel-border); background:transparent;
+    color:var(--ink-dim); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;
   }
-  .task-row .task-main{ flex:1; min-width:0; }
-  .task-row .task-name{ font-weight:600; font-size:0.92rem; }
-  .task-row .task-meta{ font-size:0.76rem; color:var(--ink-faint); margin-top:0.15rem; font-family:var(--mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .icon-btn svg.i{ width:16px; height:16px; }
+  .icon-btn:hover{ color:var(--ink); border-color:var(--ink-faint); }
+  .icon-btn.danger:hover{ color:var(--danger); border-color:rgba(229,89,95,0.5); background:rgba(229,89,95,0.07); }
+  .form-actions{ grid-column:1/-1; display:flex; justify-content:flex-end; gap:0.55rem; align-items:center; flex-wrap:wrap; }
+  .form-actions .btn{ flex:1; }
+  @container (min-width: 560px){ .form-actions .btn{ flex:0 0 auto; } }
+
+  .reg-toolbar{ display:flex; gap:0.6rem; flex-wrap:wrap; align-items:center; margin-bottom:0.9rem;
+    padding:0.6rem 0.8rem; background:var(--panel); border:1px solid var(--panel-border); border-radius:8px; }
+  .reg-toolbar .search-wrap{ position:relative; flex:1; min-width:170px; }
+  .reg-toolbar .search-wrap svg{ position:absolute; left:0.6rem; top:50%; transform:translateY(-50%); opacity:0.5; width:14px; height:14px; pointer-events:none; }
+  .reg-toolbar input[type="search"], .reg-toolbar select{ background:var(--field); border:1px solid var(--panel-border); color:var(--ink); padding:0.42rem 0.7rem; border-radius:7px; font-size:0.83rem; }
+  .reg-toolbar input[type="search"]{ width:100%; padding-left:2rem; }
+  .reg-toolbar select{ flex:1 1 140px; }
+  @container (min-width: 640px){ .reg-toolbar select{ flex:0 0 auto; } }
+  .reg-summary{ font-family:var(--mono); font-size:0.74rem; color:var(--ink-faint); margin:0 0 0.7rem; }
+  .task-row .task-pct{ display:flex; align-items:center; gap:0.5rem; margin-top:0.4rem; max-width:260px; }
+  .task-row .task-pct .bar-track{ height:6px; }
+  .task-row .task-pct span{ font-family:var(--mono); font-size:0.7rem; color:var(--ink-dim); white-space:nowrap; }
+  .registry-head{ display:flex; align-items:center; justify-content:space-between; gap:0.7rem; margin:1.4rem 0 0.7rem; flex-wrap:wrap; }
+  .registry-head h3{ font-size:0.9rem; color:var(--ink-dim); }
+  .registry-head input{
+    background:var(--field); border:1px solid var(--panel-border); color:var(--ink); padding:0.4rem 0.7rem;
+    border-radius:7px; font-size:0.82rem; flex:1; min-width:150px; max-width:260px;
+  }
+  .task-row{
+    display:flex; align-items:center; gap:0.7rem; padding:0.65rem 0.8rem; flex-wrap:wrap;
+    border:1px solid var(--panel-border); border-radius:8px; background:var(--field); margin-bottom:0.5rem;
+  }
+  .task-row.flash{ animation:flash 1.4s ease; }
+  .task-row.is-editing{ border-color:var(--accent-dim); }
+  @keyframes flash{ 0%{ background:rgba(227,179,79,0.18); border-color:var(--accent);} 100%{ background:var(--field);} }
+  .task-row .task-main{ flex:1 1 180px; min-width:0; }
+  .task-row .task-name{ font-weight:600; font-size:0.9rem; overflow-wrap:anywhere; }
+  .task-row .task-meta{ font-size:0.74rem; color:var(--ink-faint); margin-top:0.15rem; font-family:var(--mono); }
+  .task-row .task-meta b{ color:var(--ink-dim); font-weight:600; }
+  .task-row .task-note{ font-size:0.75rem; color:var(--ink-faint); margin-top:0.2rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row-actions{ display:flex; gap:0.35rem; align-items:center; margin-left:auto; }
+  .shortcuts{ margin-top:1.4rem; font-size:0.72rem; color:var(--ink-faint); line-height:2; }
+
   .badge{
-    font-family:var(--mono); font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em;
-    padding:0.2rem 0.5rem; border-radius:99px; border:1px solid var(--panel-border); color:var(--ink-dim); white-space:nowrap;
+    font-family:var(--mono); font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em;
+    padding:0.18rem 0.5rem; border-radius:99px; border:1px solid var(--panel-border); color:var(--ink-dim); white-space:nowrap;
   }
   .badge-diaria{ color:var(--teal); border-color:var(--teal-dim); }
   .badge-semanal{ color:var(--accent); border-color:var(--accent-dim); }
@@ -164,178 +265,276 @@
   .badge-sev-alta{ color:var(--danger); border-color:var(--danger-dim); }
   .badge-sev-media{ color:var(--warn); border-color:#7a5c2e; }
 
-  /* ---------- module 2: filter bar ---------- */
+  /* ================= Checklist ================= */
+  .day-nav{ display:flex; align-items:center; gap:0.5rem; padding:0.6rem 0.75rem; margin-bottom:0.9rem; flex-wrap:wrap; }
+  .day-nav-center{ flex:1; min-width:150px; text-align:center; line-height:1.25; }
+  .day-nav-rel{ display:block; font-family:var(--mono); font-size:0.68rem; text-transform:uppercase; letter-spacing:0.1em; color:var(--accent); }
+  .day-nav-center strong{ font-family:var(--display); font-size:0.98rem; text-transform:capitalize; }
+  .day-nav-tools{ display:flex; gap:0.4rem; align-items:center; width:100%; justify-content:center; }
+  @container (min-width: 560px){ .day-nav-tools{ width:auto; } }
+  .date-jump input{
+    background:var(--field); border:1px solid var(--panel-border); color:var(--ink-dim); border-radius:7px;
+    padding:0.32rem 0.5rem; font-size:0.78rem; color-scheme:dark;
+  }
+  .notice{
+    font-size:0.8rem; border-radius:8px; padding:0.6rem 0.85rem; margin-bottom:0.9rem;
+    border:1px solid var(--panel-border); color:var(--ink-dim); background:var(--panel);
+  }
+  .notice.info{ border-color:#3d5a80; color:#8fb3e6; }
+  .notice.weekend{ border-color:var(--accent-dim); color:var(--ink-dim); display:flex; gap:0.7rem; align-items:center; flex-wrap:wrap; }
+  .notice.weekend strong{ color:var(--accent); }
+  .notice.weekend .notice-actions{ display:flex; gap:0.4rem; margin-left:auto; }
+  .celebrate{
+    display:flex; align-items:center; gap:0.7rem; border:1px solid rgba(87,183,136,0.45);
+    background:linear-gradient(90deg, rgba(87,183,136,0.12), rgba(87,183,136,0.03)); color:var(--success);
+    padding:0.7rem 0.95rem; border-radius:9px; margin-bottom:1rem; font-weight:600; font-size:0.87rem;
+    animation:pop .4s cubic-bezier(.2,1.4,.4,1);
+  }
+  @keyframes pop{ from{ transform:scale(0.96); opacity:0; } to{ transform:none; opacity:1; } }
+
+  .day-summary{ display:grid; grid-template-columns:repeat(3, 1fr); gap:0.7rem; }
+  .day-summary .ring-card{ grid-column:1 / -1; }
+  @container (min-width: 600px){
+    .day-summary{ grid-template-columns:1.25fr repeat(3, 1fr); }
+    .day-summary .ring-card{ grid-column:auto; }
+  }
+  .ring-card{ display:flex; align-items:center; gap:0.9rem; background:var(--panel); border:1px solid var(--panel-border); border-radius:8px; padding:0.65rem 0.95rem; }
+  .ring{ width:58px; height:58px; flex-shrink:0; transform:rotate(-90deg); }
+  .ring circle{ fill:none; stroke-width:7; }
+  .ring .ring-bg{ stroke:var(--field); }
+  .ring .ring-fg{ stroke:var(--teal); stroke-linecap:round; transition:stroke-dashoffset .5s ease, stroke .3s ease; }
+  .ring-text strong{ display:block; font-family:var(--mono); font-size:1.35rem; font-weight:600; line-height:1.1; }
+  .ring-text span{ font-size:0.7rem; color:var(--ink-faint); text-transform:uppercase; letter-spacing:0.05em; }
+  .mini-stat{ background:var(--panel); border:1px solid var(--panel-border); border-radius:8px; padding:0.6rem 0.85rem; }
+  .mini-stat .n{ font-family:var(--mono); font-size:1.3rem; font-weight:600; color:var(--accent); }
+  .mini-stat .l{ font-size:0.68rem; color:var(--ink-faint); text-transform:uppercase; letter-spacing:0.05em; }
+
+  .freq-widget-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(118px, 1fr)); gap:0.6rem; margin-bottom:1.2rem; }
+  .freq-widget{
+    appearance:none; text-align:left; color:inherit; cursor:pointer; font:inherit;
+    background:var(--panel); border:1px solid var(--panel-border); border-radius:9px; padding:0.7rem 0.8rem;
+    transition:border-color .12s ease, transform .12s ease;
+  }
+  .freq-widget:hover{ border-color:var(--ink-faint); transform:translateY(-1px); }
+  .freq-widget.active{ border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .freq-widget .fw-head{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:0.35rem; gap:0.3rem; }
+  .freq-widget .fw-title{ font-size:0.76rem; font-weight:700; }
+  .freq-widget .fw-count{ font-family:var(--mono); font-size:0.64rem; color:var(--ink-faint); white-space:nowrap; }
+  .freq-widget .fw-pct{ font-family:var(--mono); font-size:1.2rem; font-weight:600; }
+  .freq-widget .fw-detail{ font-size:0.68rem; color:var(--ink-faint); }
+  .freq-widget .bar-track{ margin-top:0.45rem; height:7px; }
+
   .filter-bar{
-    display:flex; align-items:center; gap:0.7rem; flex-wrap:wrap; margin-bottom:1.4rem;
-    padding:0.65rem 0.9rem; background:var(--panel); border:1px solid var(--panel-border); border-radius:8px;
+    display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap; margin-bottom:1.2rem;
+    padding:0.6rem 0.8rem; background:var(--panel); border:1px solid var(--panel-border); border-radius:8px;
   }
-  .filter-bar label{ font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-faint); white-space:nowrap; }
-  .filter-bar select{ background:#151822; border:1px solid var(--panel-border); color:var(--ink); padding:0.45rem 0.7rem; border-radius:7px; font-size:0.85rem; }
-  .filter-bar .search-wrap{ position:relative; flex:1; min-width:190px; }
-  .filter-bar .search-wrap svg{ position:absolute; left:0.6rem; top:50%; transform:translateY(-50%); opacity:0.5; pointer-events:none; }
+  .filter-bar select{ background:var(--field); border:1px solid var(--panel-border); color:var(--ink); padding:0.42rem 0.6rem; border-radius:7px; font-size:0.83rem; }
+  .filter-bar .search-wrap{ position:relative; flex:1; min-width:150px; }
+  .filter-bar .search-wrap svg{ position:absolute; left:0.6rem; top:50%; transform:translateY(-50%); opacity:0.5; pointer-events:none; width:14px; height:14px; }
   .filter-bar input[type="search"]{
-    width:100%; background:#151822; border:1px solid var(--panel-border); color:var(--ink);
-    padding:0.45rem 0.7rem 0.45rem 2rem; border-radius:7px; font-size:0.85rem;
+    width:100%; background:var(--field); border:1px solid var(--panel-border); color:var(--ink);
+    padding:0.42rem 0.7rem 0.42rem 2rem; border-radius:7px; font-size:0.83rem;
   }
-  .filter-count{ font-family:var(--mono); font-size:0.76rem; color:var(--ink-faint); margin-left:auto; }
-  .btn-clear-filters{ background:transparent; border:1px solid var(--panel-border); color:var(--ink-faint); border-radius:7px; padding:0.42rem 0.7rem; font-size:0.76rem; cursor:pointer; }
-  .btn-clear-filters:hover{ color:var(--ink); border-color:var(--ink-faint); }
+  .filter-count{ font-family:var(--mono); font-size:0.74rem; color:var(--ink-faint); width:100%; }
+  .filter-count:empty{ display:none; }
 
-  /* widgets */
-  .widget-grid{ display:grid; grid-template-columns:repeat(4, 1fr); gap:0.9rem; margin-bottom:0.4rem; }
-  .mini-stat{ background:var(--panel); border:1px solid var(--panel-border); border-radius:8px; padding:0.7rem 1rem; min-width:130px; }
-  .mini-stat .n{ font-family:var(--mono); font-size:1.4rem; font-weight:600; color:var(--accent); }
-  .mini-stat .l{ font-size:0.72rem; color:var(--ink-faint); text-transform:uppercase; letter-spacing:0.05em; }
-
-  .freq-widget-grid{ display:grid; grid-template-columns:repeat(5, 1fr); gap:0.8rem; margin-bottom:1.6rem; }
-  .freq-widget{ background:var(--panel); border:1px solid var(--panel-border); border-radius:9px; padding:0.85rem 0.9rem; }
-  .freq-widget .fw-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem; }
-  .freq-widget .fw-title{ font-size:0.78rem; font-weight:700; }
-  .freq-widget .fw-count{ font-family:var(--mono); font-size:0.68rem; color:var(--ink-faint); }
-  .freq-widget .fw-pct{ font-family:var(--mono); font-size:1.35rem; font-weight:600; color:var(--ink); }
-  .freq-widget .fw-detail{ font-size:0.7rem; color:var(--ink-faint); margin-top:0.15rem; }
-  .freq-widget .bar-track{ margin-top:0.5rem; }
-
-  /* ---------- checklist items ---------- */
-  .checklist-group{ margin-bottom:1.6rem; }
+  .checklist-group{ margin-bottom:1.4rem; }
   .checklist-group h3{
-    font-size:0.85rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-faint);
-    margin-bottom:0.7rem; display:flex; align-items:center; gap:0.5rem;
+    font-size:0.8rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-faint);
+    margin-bottom:0.6rem; display:flex; align-items:center; gap:0.5rem;
   }
+  .checklist-group h3 .count{ font-family:var(--mono); color:var(--ink-dim); }
   .checklist-group h3::after{ content:""; flex:1; height:1px; background:var(--panel-border); }
+  .checklist-group.overdue h3{ color:var(--warn); }
 
-  .check-item{ display:flex; align-items:center; gap:0.9rem; background:var(--panel); border:1px solid var(--panel-border); border-radius:9px; padding:0.8rem 0.9rem; margin-bottom:0.6rem; }
-  .check-item.done{ border-color:rgba(87,183,136,0.35); background:linear-gradient(0deg, rgba(87,183,136,0.05), rgba(87,183,136,0.05)), var(--panel); }
-
-  .stamp-btn{
-    position:relative; flex-shrink:0; width:52px; height:52px; border-radius:50%;
-    border:2px dashed var(--panel-border); background:#151822; cursor:pointer;
-    display:flex; align-items:center; justify-content:center; color:var(--ink-faint); font-size:1.1rem;
+  .check-item{
+    display:flex; align-items:center; gap:0.8rem; background:var(--panel); border:1px solid var(--panel-border);
+    border-radius:9px; padding:0.7rem 0.8rem; margin-bottom:0.5rem; cursor:pointer;
+    transition:border-color .12s ease, background .12s ease;
   }
-  .stamp-btn:hover{ border-color:var(--ink-faint); }
-  .stamp-btn .stamp-ink-mark{
+  .check-item:hover{ border-color:var(--ink-faint); }
+  .check-item.done{ border-color:rgba(87,183,136,0.35); background:linear-gradient(0deg, rgba(87,183,136,0.05), rgba(87,183,136,0.05)), var(--panel); }
+  .check-item.overdue-item{ border-left:3px solid var(--warn); }
+  .check-item.is-disabled{ cursor:default; opacity:0.6; }
+  .check-item.is-disabled:hover{ border-color:var(--panel-border); }
+  .stamp-btn{
+    position:relative; flex-shrink:0; width:46px; height:46px; border-radius:50%;
+    border:2px dashed var(--panel-border); background:var(--field); cursor:pointer;
+    display:flex; align-items:center; justify-content:center; color:var(--ink-faint); font-size:1rem;
+  }
+  .check-item:hover .stamp-btn{ border-color:var(--ink-faint); color:var(--ink); }
+  .stamp-btn:disabled{ cursor:not-allowed; }
+  .stamp-ink-mark{
     position:absolute; inset:-4px; border-radius:50%; border:3px solid var(--stamp-ink);
     display:flex; align-items:center; justify-content:center; color:var(--stamp-ink);
-    font-family:var(--display); font-weight:700; font-size:0.62rem; letter-spacing:0.03em;
-    text-transform:uppercase; text-align:center; opacity:0; transform:scale(1.6) rotate(-14deg);
+    font-family:var(--display); font-weight:700; font-size:0.56rem; letter-spacing:0.03em;
+    text-transform:uppercase; text-align:center; opacity:0; transform:rotate(-14deg);
     background:radial-gradient(circle at 40% 35%, rgba(31,122,92,0.16), transparent 70%);
   }
   .check-item.done .stamp-btn{ border-style:solid; border-color:var(--stamp-ink); }
-  .check-item.done .stamp-btn .stamp-ink-mark{ opacity:1; transform:scale(1) rotate(-14deg); transition:opacity .28s ease, transform .28s cubic-bezier(.2,1.4,.4,1); }
-  .check-item .stamp-btn:not(.stamped) .stamp-ink-mark{ transition:opacity .15s ease, transform .15s ease; }
-
+  .check-item.done .stamp-ink-mark{ opacity:1; }
+  .check-item.just-stamped .stamp-ink-mark{ animation:stamp .32s cubic-bezier(.2,1.4,.4,1); }
+  @keyframes stamp{ from{ opacity:0; transform:scale(1.6) rotate(-14deg);} to{ opacity:1; transform:scale(1) rotate(-14deg);} }
   .check-item .item-main{ flex:1; min-width:0; }
-  .check-item .item-name{ font-weight:600; font-size:0.95rem; }
-  .check-item .item-meta{ display:flex; gap:0.5rem; margin-top:0.3rem; flex-wrap:wrap; align-items:center; }
-  .check-item .item-status{ font-family:var(--mono); font-size:0.72rem; color:var(--ink-faint); }
+  .check-item .item-name{ font-weight:600; font-size:0.92rem; overflow-wrap:anywhere; }
+  .check-item.done .item-name{ color:var(--ink-dim); }
+  .check-item .item-meta{ display:flex; gap:0.45rem; margin-top:0.25rem; flex-wrap:wrap; align-items:center; }
+  .check-item .item-status{ font-family:var(--mono); font-size:0.7rem; color:var(--ink-faint); }
   .check-item.done .item-status{ color:var(--success); }
-  .check-item .item-note{ font-size:0.76rem; color:var(--ink-faint); margin-top:0.25rem; }
+  .check-item.overdue-item .item-status{ color:var(--warn); }
+  .check-item .item-note{ font-size:0.74rem; color:var(--ink-faint); margin-top:0.2rem; }
 
-  .empty-state{ border:1px dashed var(--panel-border); border-radius:var(--radius); padding:2.2rem 1.5rem; text-align:center; color:var(--ink-faint); }
-  .empty-state p{ margin:0.4rem 0 1rem; font-size:0.88rem; }
-  .empty-state.small{ padding:1.1rem 1rem; }
-  .empty-state.small p{ margin:0; }
+  .empty-state{ border:1px dashed var(--panel-border); border-radius:var(--radius); padding:1.8rem 1.2rem; text-align:center; color:var(--ink-faint); }
+  .empty-state p{ margin:0.3rem 0 0.9rem; font-size:0.86rem; }
+  .empty-state.small{ padding:0.95rem 0.9rem; }
+  .empty-state.small p{ margin:0; font-size:0.82rem; }
+  .skeleton{ height:54px; border-radius:9px; margin-bottom:0.5rem; border:1px solid var(--panel-border);
+    background:linear-gradient(90deg, var(--panel) 0%, var(--panel-alt) 50%, var(--panel) 100%); background-size:200% 100%; animation:shimmer 1.2s linear infinite; }
+  @keyframes shimmer{ to{ background-position:-200% 0; } }
 
-  details.all-tasks{ margin-top:1.5rem; }
-  details.all-tasks summary{ cursor:pointer; font-size:0.85rem; color:var(--ink-dim); font-weight:600; padding:0.5rem 0; list-style:none; display:flex; align-items:center; gap:0.4rem; }
-  details.all-tasks summary::-webkit-details-marker{ display:none; }
-  details.all-tasks summary::before{ content:"▸"; color:var(--accent); transition:transform .15s ease; }
-  details.all-tasks[open] summary::before{ transform:rotate(90deg); }
-
-  /* ---------- dashboard ---------- */
-  .kpi-grid{ display:grid; grid-template-columns:repeat(4, 1fr); gap:0.9rem; margin-bottom:0.4rem; }
-  .kpi-card{ background:var(--panel); border:1px solid var(--panel-border); border-radius:var(--radius); padding:1rem 1.1rem; position:relative; overflow:hidden; }
-  .kpi-card .kpi-label{ font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-faint); }
-  .kpi-card .kpi-value{ font-family:var(--mono); font-size:1.9rem; font-weight:600; margin-top:0.35rem; color:var(--ink); }
-  .kpi-card .kpi-value small{ font-size:1rem; color:var(--ink-faint); font-weight:400; }
-  .kpi-card .kpi-sub{ font-size:0.75rem; color:var(--ink-faint); margin-top:0.2rem; }
+  /* ================= Reportes ================= */
+  .scope-note{
+    display:flex; gap:0.55rem; align-items:center; font-size:0.78rem; color:var(--ink-dim);
+    background:var(--panel); border:1px solid var(--panel-border); border-radius:8px; padding:0.5rem 0.8rem;
+  }
+  .scope-note svg{ color:var(--accent); width:16px; height:16px; }
+  .kpi-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0.7rem; }
+  .kpi-card{ background:var(--panel); border:1px solid var(--panel-border); border-radius:var(--radius); padding:0.85rem 0.95rem; }
+  .kpi-card .kpi-label{ font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-faint); }
+  .kpi-card .kpi-value{ font-family:var(--mono); font-size:1.7rem; font-weight:600; margin-top:0.25rem; }
+  .kpi-card .kpi-value small{ font-size:0.9rem; color:var(--ink-faint); font-weight:400; }
+  .kpi-card .kpi-sub{ font-size:0.72rem; color:var(--ink-faint); margin-top:0.15rem; }
   .kpi-card.accent .kpi-value{ color:var(--accent); }
   .kpi-card.teal .kpi-value{ color:var(--teal); }
   .kpi-card.success .kpi-value{ color:var(--success); }
-  .kpi-card.warn .kpi-value{ color:var(--warn); }
 
-  .dash-grid{ display:grid; grid-template-columns:1.3fr 1fr; gap:1.1rem; }
-  .panel-title{ font-size:0.9rem; font-weight:700; margin-bottom:0.9rem; display:flex; align-items:center; justify-content:space-between; }
-  .panel-title span{ font-family:var(--mono); font-size:0.7rem; color:var(--ink-faint); font-weight:400; }
+  .dash-grid{ display:grid; grid-template-columns:1fr; gap:0.9rem; }
+  @container (min-width: 720px){ .dash-grid{ grid-template-columns:1.3fr 1fr; } }
+  .panel-title{ font-size:0.86rem; font-weight:700; margin-bottom:0.8rem; display:flex; align-items:baseline; justify-content:space-between; gap:0.5rem; flex-wrap:wrap; }
+  .panel-title span{ font-family:var(--mono); font-size:0.66rem; color:var(--ink-faint); font-weight:400; }
 
-  .bar-row{ display:flex; align-items:center; gap:0.7rem; margin-bottom:0.7rem; }
-  .bar-row .bar-label{ width:38%; font-size:0.8rem; color:var(--ink-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .bar-track{ flex:1; height:10px; background:#151822; border-radius:99px; overflow:hidden; border:1px solid var(--panel-border); }
+  .bar-row{ display:flex; align-items:center; gap:0.6rem; margin-bottom:0.6rem; }
+  .bar-row .bar-label{ width:40%; font-size:0.78rem; color:var(--ink-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bar-track{ flex:1; height:9px; background:var(--field); border-radius:99px; overflow:hidden; border:1px solid var(--panel-border); }
   .bar-fill{ height:100%; border-radius:99px; background:linear-gradient(90deg, var(--teal-dim), var(--teal)); transition:width .4s ease; }
   .bar-fill.low{ background:linear-gradient(90deg, #7a3236, var(--danger)); }
   .bar-fill.mid{ background:linear-gradient(90deg, var(--accent-dim), var(--accent)); }
-  .bar-pct{ width:44px; text-align:right; font-family:var(--mono); font-size:0.78rem; color:var(--ink-dim); }
+  .bar-pct{ width:40px; text-align:right; font-family:var(--mono); font-size:0.76rem; color:var(--ink-dim); }
 
-  table.summary-table{ width:100%; border-collapse:collapse; font-size:0.83rem; }
-  table.summary-table th{ text-align:left; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-faint); padding:0.5rem 0.4rem; border-bottom:1px solid var(--panel-border); }
-  table.summary-table td{ padding:0.55rem 0.4rem; border-bottom:1px solid var(--panel-border); color:var(--ink-dim); }
+  .table-wrap{ overflow-x:auto; }
+  table.summary-table{ width:100%; border-collapse:collapse; font-size:0.8rem; min-width:460px; }
+  table.summary-table th{ text-align:left; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-faint); padding:0.45rem 0.4rem; border-bottom:1px solid var(--panel-border); white-space:nowrap; }
+  table.summary-table th button{ all:unset; cursor:pointer; }
+  table.summary-table th button:hover, table.summary-table th button[aria-sort]{ color:var(--accent); }
+  table.summary-table td{ padding:0.5rem 0.4rem; border-bottom:1px solid var(--panel-border); color:var(--ink-dim); }
   table.summary-table td.num{ font-family:var(--mono); color:var(--ink); }
 
-  .streak-visual{ display:flex; gap:5px; margin-top:0.8rem; flex-wrap:wrap; }
-  .streak-day{ width:16px; height:16px; border-radius:3px; background:#151822; border:1px solid var(--panel-border); }
-  .streak-day.hit{ background:var(--stamp-ink); border-color:var(--stamp-ink); }
-  .streak-day.miss{ background:rgba(229,89,95,0.35); border-color:rgba(229,89,95,0.5); }
+  .week-grid{ display:grid; grid-template-columns:repeat(5, 1fr); gap:6px; max-width:300px; }
+  .week-grid .wk-head{ font-family:var(--mono); font-size:0.64rem; color:var(--ink-faint); text-align:center; }
+  .streak-day{
+    appearance:none; aspect-ratio:1; border-radius:5px; background:var(--field); border:1px solid var(--panel-border);
+    cursor:pointer; padding:0; font-family:var(--mono); font-size:0.66rem; color:var(--ink-faint);
+  }
+  .streak-day:hover{ outline:1px solid var(--ink-faint); }
+  .streak-day.hit{ background:var(--stamp-ink); border-color:var(--stamp-ink); color:#cfeee1; }
+  .streak-day.miss{ background:rgba(229,89,95,0.35); border-color:rgba(229,89,95,0.5); color:#f6c9cb; }
+  .streak-day.partial{ background:rgba(227,179,79,0.25); border-color:var(--accent-dim); color:var(--accent); }
+  .streak-day.future{ opacity:0.35; cursor:default; }
+  .streak-day.today{ box-shadow:0 0 0 2px var(--accent); }
+  .legend{ display:flex; gap:0.8rem; flex-wrap:wrap; margin-top:0.7rem; font-size:0.7rem; color:var(--ink-faint); }
+  .legend i{ display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:0.3rem; vertical-align:-1px; }
 
-  .rank-row{ display:flex; align-items:center; gap:0.8rem; padding:0.6rem 0; border-bottom:1px solid var(--panel-border); }
+  .rank-row{ display:flex; align-items:center; gap:0.7rem; padding:0.55rem 0; border-bottom:1px solid var(--panel-border); }
   .rank-row:last-child{ border-bottom:none; }
   .rank-badge{
-    width:24px; height:24px; border-radius:50%; background:#151822; border:1px solid var(--panel-border);
-    display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:0.72rem; color:var(--ink-faint); flex-shrink:0;
+    width:24px; height:24px; border-radius:50%; background:var(--field); border:1px solid var(--panel-border);
+    display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:0.7rem; color:var(--ink-faint); flex-shrink:0;
   }
   .rank-main{ flex:1; min-width:0; }
-  .rank-name{ font-size:0.86rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .rank-detail{ font-size:0.74rem; color:var(--ink-faint); font-family:var(--mono); }
-  .rank-pct{ font-family:var(--mono); font-weight:600; font-size:0.95rem; }
-  .rank-pct.low{ color:var(--danger); }
-  .rank-pct.mid{ color:var(--warn); }
-  .rank-pct.high{ color:var(--success); }
+  .rank-name{ font-size:0.84rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .rank-detail{ font-size:0.72rem; color:var(--ink-faint); font-family:var(--mono); }
+  .rank-pct{ font-family:var(--mono); font-weight:600; font-size:0.92rem; }
+  .rank-pct.low{ color:var(--danger); } .rank-pct.mid{ color:var(--warn); } .rank-pct.high{ color:var(--success); }
 
-  .alert-item{ display:flex; align-items:flex-start; gap:0.8rem; padding:0.7rem 0.85rem; border:1px solid var(--panel-border); border-radius:8px; background:#151822; margin-bottom:0.55rem; }
+  .alert-item{ display:flex; align-items:flex-start; gap:0.7rem; padding:0.6rem 0.8rem; border:1px solid var(--panel-border); border-radius:8px; background:var(--field); margin-bottom:0.5rem; }
   .alert-item .alert-main{ flex:1; min-width:0; }
-  .alert-item .alert-name{ font-weight:600; font-size:0.88rem; }
-  .alert-item .alert-detail{ font-size:0.78rem; color:var(--ink-faint); margin-top:0.2rem; font-family:var(--mono); }
+  .alert-item .alert-name{ font-weight:600; font-size:0.86rem; }
+  .alert-item .alert-detail{ font-size:0.75rem; color:var(--ink-faint); margin-top:0.15rem; font-family:var(--mono); }
 
-  .age-bucket-row{ display:flex; align-items:center; gap:0.7rem; margin-bottom:0.7rem; }
-  .age-bucket-row .bucket-label{ width:34%; font-size:0.8rem; color:var(--ink-dim); }
-  .age-bucket-row .bucket-count{ width:30px; text-align:right; font-family:var(--mono); font-size:0.8rem; color:var(--ink); }
+  .age-bucket-row{ display:flex; align-items:center; gap:0.6rem; margin-bottom:0.6rem; }
+  .age-bucket-row .bucket-label{ width:38%; font-size:0.78rem; color:var(--ink-dim); }
+  .age-bucket-row .bucket-count{ width:28px; text-align:right; font-family:var(--mono); font-size:0.78rem; }
 
+  /* ================= Toast ================= */
   .toast{
     position:fixed; bottom:1.2rem; left:50%; transform:translateX(-50%) translateY(8px);
     background:var(--panel); border:1px solid var(--panel-border); color:var(--ink);
-    padding:0.65rem 1.1rem; border-radius:8px; font-size:0.85rem; box-shadow:var(--shadow);
+    padding:0.55rem 0.6rem 0.55rem 1rem; border-radius:8px; font-size:0.85rem; box-shadow:var(--shadow);
     opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease; z-index:60;
-    display:flex; align-items:center; gap:0.5rem;
+    display:flex; align-items:center; gap:0.7rem; max-width:calc(100vw - 2rem);
   }
-  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
   .toast::before{ content:"●"; color:var(--success); font-size:0.7rem; }
-
-  footer.app-footer{ max-width:1180px; margin:0 auto; padding:1.5rem 1.25rem 2.5rem; color:var(--ink-faint); font-size:0.76rem; text-align:center; }
+  .toast.error::before{ color:var(--danger); }
+  .toast-action{
+    appearance:none; background:transparent; border:1px solid var(--accent-dim); color:var(--accent);
+    border-radius:6px; padding:0.25rem 0.6rem; font-weight:600; font-size:0.78rem; cursor:pointer; white-space:nowrap;
+  }
+  .toast-action:hover{ background:rgba(227,179,79,0.1); }
 
   @media (prefers-reduced-motion: reduce){ *{ animation-duration:0.01ms !important; transition-duration:0.01ms !important; } }
 
-  @media (max-width: 900px){
-    .kpi-grid{ grid-template-columns:1fr 1fr; }
-    .freq-widget-grid{ grid-template-columns:repeat(3, 1fr); }
-    .dash-grid{ grid-template-columns:1fr; }
-    .widget-grid{ grid-template-columns:1fr 1fr; }
-  }
-  @media (max-width: 640px){
-    .task-form{ grid-template-columns:1fr; }
-    .kpi-grid{ grid-template-columns:1fr 1fr; }
-    .freq-widget-grid{ grid-template-columns:1fr 1fr; }
-    .widget-grid{ grid-template-columns:1fr 1fr; }
-    .header-inner{ flex-direction:column; align-items:flex-start; }
-    .header-clock{ text-align:left; }
-    .tabs{ overflow-x:auto; padding-bottom:0; }
-    .tab-btn{ flex-shrink:0; }
-    .check-item{ flex-wrap:wrap; }
-    .form-actions{ justify-content:stretch; }
-    .form-actions .btn{ flex:1; justify-content:center; }
-    .filter-bar .filter-count{ margin-left:0; width:100%; }
+  /* ================= Móvil: selector como barra inferior ================= */
+  @media (max-width: 760px){
+    .app-header{ padding:0.55rem 1rem; backdrop-filter:none; background:var(--bg); }
+    .header-inner{ grid-template-columns:1fr auto; }
+    .brand-text p, .header-clock{ display:none; }
+    .brand-text{ min-width:0; }
+    .brand-text h1{ overflow:hidden; text-overflow:ellipsis; }
+    .view-switch{
+      position:fixed; left:0; right:0; bottom:0; z-index:40; border-radius:0; border-width:1px 0 0;
+      padding:0.35rem 0.5rem calc(0.35rem + env(safe-area-inset-bottom)); justify-content:space-around;
+      background:rgba(27,31,40,0.97); backdrop-filter:blur(6px);
+    }
+    .vs-btn{ flex:1; flex-direction:column; gap:0.1rem; height:50px; font-size:0.66rem; }
+    .vs-label{ display:inline; }
+    .vs-badge{ right:calc(50% - 22px); }
+    .vs-btn.vs-add{ flex:0 0 58px; width:58px; height:58px; border-radius:50%; transform:translateY(-14px); box-shadow:0 8px 20px -6px rgba(227,179,79,0.55); }
+    .vs-btn.vs-add .vs-label{ display:none; }
+    .vs-btn.vs-add svg.i{ width:24px; height:24px; }
+    .add-dialog{ width:100vw; max-height:92vh; margin:auto 0 0; border-radius:16px 16px 0 0; border-width:1px 0 0; }
+    .add-dialog[open]{ animation:sheetIn .25s ease; }
+    @keyframes sheetIn{ from{ transform:translateY(40px); opacity:0; } to{ transform:none; opacity:1; } }
+    .dlg-body{ padding-bottom:calc(1.3rem + env(safe-area-inset-bottom)); }
+    .workspace{ padding:0.8rem 1rem calc(80px + env(safe-area-inset-bottom)); }
+    .panel{ padding:0 0.9rem 1.2rem; }
+    .panel-head{ margin:0 -0.9rem 0.9rem; padding:0.75rem 0.9rem 0.6rem; }
+    .toast{ bottom:calc(76px + env(safe-area-inset-bottom)); }
+    .shortcuts, .kbd-hint{ display:none; }
   }
 </style>
 </head>
 <body>
+
+<!-- Iconos reutilizables -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></symbol>
+  <symbol id="i-max" viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></symbol>
+  <symbol id="i-min" viewBox="0 0 24 24"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></symbol>
+  <symbol id="i-plusc" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="9" y1="18" x2="21" y2="18"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/></symbol>
+  <symbol id="i-ok" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+</svg>
 
 <header class="app-header">
   <div class="header-inner">
@@ -343,159 +542,191 @@
       <div class="brand-mark" aria-hidden="true">CT</div>
       <div class="brand-text">
         <h1>Bitácora de Control</h1>
-        <p>Tareas &amp; cumplimiento diario</p>
+        <p>Tareas &amp; cumplimiento · Lun–Vie</p>
       </div>
     </div>
-    <div class="header-clock" id="headerClock" aria-live="off">
-      <strong id="clockTime">--:--</strong>
-      <span id="clockDate">-- de -- de ----</span>
+
+    <nav class="view-switch" aria-label="Navegación principal">
+      <button class="vs-btn" type="button" data-view="checklist" aria-pressed="true" title="Checklist (1)">
+        <svg class="i"><use href="#i-check"/></svg><span class="vs-label">Checklist</span>
+        <span class="vs-badge" id="tabBadge" hidden>0</span>
+      </button>
+      <button class="vs-btn" type="button" data-view="actividades" aria-pressed="false" title="Actividades registradas (2)">
+        <svg class="i"><use href="#i-list"/></svg><span class="vs-label">Actividades</span>
+      </button>
+      <button class="vs-btn vs-add" type="button" id="openAdd" aria-haspopup="dialog" aria-controls="addDialog" title="Agregar actividad (N)">
+        <svg class="i"><use href="#i-plusc"/></svg><span class="vs-label">Agregar</span>
+      </button>
+      <button class="vs-btn" type="button" data-view="dashboard" aria-pressed="false" title="Dashboard (3)">
+        <svg class="i"><use href="#i-chart"/></svg><span class="vs-label">Dashboard</span>
+      </button>
+    </nav>
+
+    <div class="header-right">
+      <span class="sync-pill saving" id="syncStatus" role="status" aria-live="polite">Conectando…</span>
+      <div class="header-clock">
+        <strong id="clockTime">--:--</strong>
+        <span id="clockDate">--</span>
+      </div>
     </div>
-    <button type="button" class="btn btn-primary" id="installBtn" hidden>Instalar app</button>
   </div>
-  <nav class="tabs" role="tablist" aria-label="Secciones de la aplicación">
-    <button class="tab-btn" id="tabbtn-registro" role="tab" aria-selected="true" aria-controls="registro" data-target="registro">
-      <span class="tab-num">01</span> Registrar
-    </button>
-    <button class="tab-btn" id="tabbtn-checklist" role="tab" aria-selected="false" aria-controls="checklist" data-target="checklist">
-      <span class="tab-num">02</span> Checklist
-    </button>
-    <button class="tab-btn" id="tabbtn-dashboard" role="tab" aria-selected="false" aria-controls="dashboard" data-target="dashboard">
-      <span class="tab-num">03</span> Reportes
-    </button>
-  </nav>
 </header>
 
-<main>
+<main class="workspace" id="workspace" data-view="checklist">
 
-  <!-- ============ MÓDULO 1: REGISTRO ============ -->
-  <section id="registro" class="view is-active" role="tabpanel" aria-labelledby="tabbtn-registro">
-    <div class="view-head">
-      <p class="view-eyebrow">Paso 01</p>
-      <h2>Registrar actividad</h2>
-      <p>Da de alta cada tarea que quieras controlar: su nombre, cada cuánto debe revisarse y una nota adicional si la necesitas.</p>
-    </div>
-
-    <form class="card task-form" id="taskForm" novalidate>
-      <div class="field span-full">
-        <label for="taskName">Nombre de la actividad</label>
-        <input type="text" id="taskName" name="taskName" placeholder="Ej. Revisar reporte de ventas" required maxlength="80">
-      </div>
-
-      <div class="field">
-        <label for="taskFreq">Frecuencia de revisión</label>
-        <select id="taskFreq" name="taskFreq" required>
-          <option value="diaria">Diaria</option>
-          <option value="semanal">Semanal</option>
-          <option value="quincenal">Quincenal</option>
-          <option value="mensual">Mensual</option>
-          <option value="una_vez">Una sola vez</option>
-        </select>
-      </div>
-
-      <div class="field">
-        <label for="taskStart">Inicia el</label>
-        <input type="date" id="taskStart" name="taskStart">
-      </div>
-
-      <div class="field span-full">
-        <label for="taskNotes">Nota adicional (opcional)</label>
-        <textarea id="taskNotes" name="taskNotes" placeholder="Detalles, criterio de cumplimiento, enlaces..." maxlength="240"></textarea>
-      </div>
-
-      <div class="form-actions">
-        <button type="reset" class="btn btn-ghost">Limpiar</button>
-        <button type="submit" class="btn btn-primary">Guardar actividad</button>
-      </div>
-    </form>
-
-    <p class="freq-legend">
-      <span>Diaria</span> se revisa todos los días ·
-      <span>Semanal</span> cada 7 días ·
-      <span>Quincenal</span> cada 15 días ·
-      <span>Mensual</span> cada 30 días ·
-      <span>Una sola vez</span> queda pendiente hasta marcarla como cumplida
-    </p>
-
-    <div class="registry">
-      <h3>Actividades registradas (<span id="registryCount">0</span>)</h3>
-      <div id="registryList"></div>
-      <div class="empty-state" id="registryEmpty">
-        <p>Todavía no has registrado ninguna actividad.</p>
+  <!-- ===================== CHECKLIST ===================== -->
+  <section class="panel" id="checklist" aria-labelledby="h-checklist">
+    <div class="panel-head">
+      <div class="panel-icon"><svg class="i"><use href="#i-check"/></svg></div>
+      <div class="panel-titles">
+        <h2 id="h-checklist">Checklist</h2>
+        <p>Toca una tarjeta para marcarla o desmarcarla<span class="kbd-hint"> · <kbd>N</kbd> agregar · <kbd>2</kbd> actividades · <kbd>3</kbd> dashboard</span></p>
       </div>
     </div>
-  </section>
 
-  <!-- ============ MÓDULO 2: CHECKLIST ============ -->
-  <section id="checklist" class="view" role="tabpanel" aria-labelledby="tabbtn-checklist" hidden>
-    <div class="view-head">
-      <p class="view-eyebrow">Paso 02</p>
-      <h2>Checklist de hoy</h2>
-      <p id="checklistDateLabel">Marca cada actividad conforme la vayas realizando.</p>
+    <div class="card day-nav">
+      <button class="icon-btn" id="prevDay" type="button" aria-label="Día hábil anterior" title="Día hábil anterior (←)"><svg class="i"><use href="#i-left"/></svg></button>
+      <div class="day-nav-center">
+        <span class="day-nav-rel" id="dayRel">Hoy</span>
+        <strong id="dayLabel">—</strong>
+      </div>
+      <button class="icon-btn" id="nextDay" type="button" aria-label="Día hábil siguiente" title="Día hábil siguiente (→)"><svg class="i"><use href="#i-right"/></svg></button>
+      <div class="day-nav-tools">
+        <button class="btn btn-ghost btn-sm" id="todayBtn" type="button" hidden>Hoy</button>
+        <label class="date-jump"><span class="visually-hidden">Ir a una fecha</span><input type="date" id="dateJump"></label>
+      </div>
     </div>
+
+    <div class="notice weekend" id="weekendNote" hidden>
+      <span><strong id="weekendDay">Sábado</strong>: no es día hábil. No hay revisiones y no cuenta en las métricas.</span>
+      <span class="notice-actions">
+        <button class="btn btn-ghost btn-sm" type="button" id="goFriday">Ver viernes</button>
+        <button class="btn btn-ghost btn-sm" type="button" id="goMonday">Ver lunes</button>
+      </span>
+    </div>
+    <div class="notice info" id="futureNote" hidden>Día futuro: puedes ver lo programado, pero no marcarlo todavía.</div>
+    <div class="notice" id="pastNote" hidden>Estás registrando cumplimiento de un día pasado.</div>
+
+    <div class="celebrate" id="celebrate" hidden>
+      <svg class="i"><use href="#i-ok"/></svg>
+      <span id="celebrateText">¡Día completo!</span>
+    </div>
+
+    <div class="day-summary">
+      <div class="ring-card">
+        <svg class="ring" viewBox="0 0 64 64" aria-hidden="true">
+          <circle class="ring-bg" cx="32" cy="32" r="26"/>
+          <circle class="ring-fg" id="ringFg" cx="32" cy="32" r="26" stroke-dasharray="163.36" stroke-dashoffset="163.36"/>
+        </svg>
+        <div class="ring-text"><strong id="statPct">—</strong><span>avance del día</span></div>
+      </div>
+      <div class="mini-stat"><div class="n" id="statDue">0</div><div class="l">Programadas</div></div>
+      <div class="mini-stat"><div class="n" id="statDone">0</div><div class="l">Cumplidas</div></div>
+      <div class="mini-stat"><div class="n" id="statPending">0</div><div class="l">Pendientes</div></div>
+    </div>
+
+    <h3 class="section-title"><span class="n">≡</span> Por frecuencia</h3>
+    <p class="section-sub">Toca una tarjeta para filtrar.</p>
+    <div class="freq-widget-grid" id="freqWidgetGrid"></div>
 
     <div class="filter-bar">
-      <label for="freqFilter">Frecuencia</label>
+      <label for="freqFilter" class="visually-hidden">Frecuencia</label>
       <select id="freqFilter">
         <option value="all">Todas</option>
         <option value="diaria">Diaria</option>
         <option value="semanal">Semanal</option>
         <option value="quincenal">Quincenal</option>
         <option value="mensual">Mensual</option>
-        <option value="una_vez">Una sola vez</option>
+        <option value="una_vez">Una vez</option>
       </select>
       <div class="search-wrap">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="search" id="taskSearch" placeholder="Buscar actividad por nombre…" aria-label="Buscar actividad por nombre">
+        <svg class="i"><use href="#i-search"/></svg>
+        <input type="search" id="taskSearch" placeholder="Buscar actividad… ( / )" aria-label="Buscar actividad por nombre">
       </div>
-      <button type="button" class="btn-clear-filters" id="clearFiltersBtn">Limpiar filtros</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="clearFiltersBtn" hidden>Limpiar</button>
       <span class="filter-count" id="filterCount"></span>
     </div>
 
-    <h3 class="section-title"><span class="n">A</span> Datos generales</h3>
-    <div class="widget-grid">
-      <div class="mini-stat"><div class="n" id="statDueToday">0</div><div class="l">Programadas hoy</div></div>
-      <div class="mini-stat"><div class="n" id="statDoneToday">0</div><div class="l">Cumplidas</div></div>
-      <div class="mini-stat"><div class="n" id="statPendingToday">0</div><div class="l">Pendientes</div></div>
-      <div class="mini-stat"><div class="n" id="statPctToday">0%</div><div class="l">Avance del día</div></div>
-    </div>
-
-    <h3 class="section-title"><span class="n">B</span> Datos por frecuencia</h3>
-    <p class="section-sub">Actividades debidas hoy y avance, agrupado por su frecuencia de revisión.</p>
-    <div class="freq-widget-grid" id="freqWidgetGrid"></div>
-
-    <div class="checklist-group">
-      <h3>Pendientes</h3>
-      <div id="pendingList"></div>
-      <div class="empty-state" id="pendingEmpty" hidden>
-        <p>No tienes actividades pendientes por revisar hoy.</p>
-      </div>
+    <div class="checklist-group overdue" id="overdueGroup" hidden>
+      <h3>Atrasadas <span class="count" id="overdueCount"></span></h3>
+      <p class="section-sub" style="margin-top:-0.25rem">Su última revisión quedó sin marcar. Si sí la hiciste, márcala aquí y se registra en su fecha.</p>
+      <div id="overdueList"></div>
     </div>
 
     <div class="checklist-group">
-      <h3>Cumplidas hoy</h3>
+      <h3>Pendientes <span class="count" id="pendingCount"></span></h3>
+      <div id="pendingList"><div class="skeleton"></div><div class="skeleton"></div></div>
+      <div class="empty-state small" id="pendingEmpty" hidden><p></p></div>
+    </div>
+
+    <div class="checklist-group">
+      <h3>Cumplidas <span class="count" id="doneCount"></span></h3>
       <div id="doneList"></div>
-      <div class="empty-state" id="doneEmpty" hidden>
-        <p>Aún no has marcado ninguna actividad como cumplida hoy.</p>
-      </div>
+      <div class="empty-state small" id="doneEmpty" hidden><p></p></div>
     </div>
 
     <div class="empty-state" id="checklistEmpty" hidden>
-      <p>No hay actividades registradas todavía. Ve a la pestaña «Registrar» para crear la primera.</p>
-      <button class="btn btn-primary" data-goto="registro">Registrar actividad</button>
+      <p>No hay actividades registradas todavía.</p>
+      <button class="btn btn-primary" type="button" data-open-add>Agregar la primera actividad</button>
     </div>
-
-    <details class="all-tasks">
-      <summary>Ver todas las actividades registradas</summary>
-      <div id="allTasksList" style="margin-top:0.8rem;"></div>
-    </details>
   </section>
 
-  <!-- ============ MÓDULO 3: REPORTES ============ -->
-  <section id="dashboard" class="view" role="tabpanel" aria-labelledby="tabbtn-dashboard" hidden>
-    <div class="view-head">
-      <p class="view-eyebrow">Paso 03</p>
-      <h2>Reportes de cumplimiento</h2>
-      <p>Panorama general, desglose por frecuencia, alertas de procrastinación y antigüedad de pendientes.</p>
+  <!-- ===================== ACTIVIDADES REGISTRADAS ===================== -->
+  <section class="panel" id="actividades" aria-labelledby="h-actividades" hidden>
+    <div class="panel-head">
+      <div class="panel-icon"><svg class="i"><use href="#i-list"/></svg></div>
+      <div class="panel-titles">
+        <h2 id="h-actividades">Actividades registradas (<span id="registryCount">0</span>)</h2>
+        <p>Edita o elimina cualquier actividad</p>
+      </div>
+      <button class="btn btn-primary btn-sm" type="button" data-open-add><svg class="i" style="width:14px;height:14px"><use href="#i-plusc"/></svg>Agregar</button>
+    </div>
+
+    <div class="reg-toolbar">
+      <div class="search-wrap">
+        <svg class="i"><use href="#i-search"/></svg>
+        <input type="search" id="registrySearch" placeholder="Buscar por nombre o nota…" aria-label="Buscar actividades registradas">
+      </div>
+      <label for="regFreq" class="visually-hidden">Frecuencia</label>
+      <select id="regFreq">
+        <option value="all">Todas las frecuencias</option>
+        <option value="diaria">Diaria</option>
+        <option value="semanal">Semanal</option>
+        <option value="quincenal">Quincenal</option>
+        <option value="mensual">Mensual</option>
+        <option value="una_vez">Una vez</option>
+      </select>
+      <label for="regSort" class="visually-hidden">Ordenar</label>
+      <select id="regSort">
+        <option value="recent">Más recientes</option>
+        <option value="name">Nombre (A–Z)</option>
+        <option value="next">Próxima revisión</option>
+        <option value="pct">Menor cumplimiento</option>
+      </select>
+    </div>
+    <p class="reg-summary" id="regSummary"></p>
+
+    <div id="registryList"><div class="skeleton"></div><div class="skeleton"></div></div>
+    <div class="empty-state" id="registryEmpty" hidden>
+      <p>Todavía no has registrado ninguna actividad.</p>
+      <button class="btn btn-primary" type="button" data-open-add>Agregar la primera actividad</button>
+    </div>
+  </section>
+
+  <!-- ===================== REPORTES ===================== -->
+  <section class="panel" id="dashboard" aria-labelledby="h-dashboard" hidden>
+    <div class="panel-head">
+      <div class="panel-icon"><svg class="i"><use href="#i-chart"/></svg></div>
+      <div class="panel-titles">
+        <h2 id="h-dashboard">Dashboard</h2>
+        <p>Cumplimiento en días hábiles</p>
+      </div>
+      <button class="btn btn-ghost btn-sm" type="button" data-go="checklist"><svg class="i" style="width:14px;height:14px"><use href="#i-left"/></svg>Volver al checklist</button>
+    </div>
+
+    <div class="scope-note">
+      <svg class="i"><use href="#i-cal"/></svg>
+      <span>Todas las métricas cuentan solo <strong>lunes a viernes</strong>. Sábados y domingos no suman ni restan.</span>
     </div>
 
     <h3 class="section-title"><span class="n">1</span> Resumen general</h3>
@@ -503,112 +734,178 @@
       <div class="kpi-card accent">
         <div class="kpi-label">Cumplimiento global</div>
         <div class="kpi-value" id="kpiGlobalPct">0<small>%</small></div>
-        <div class="kpi-sub" id="kpiGlobalSub">0 de 0 revisiones esperadas</div>
+        <div class="kpi-sub" id="kpiGlobalSub">0 de 0 revisiones</div>
       </div>
       <div class="kpi-card teal">
         <div class="kpi-label">Hoy</div>
         <div class="kpi-value" id="kpiTodayPct">0<small>%</small></div>
-        <div class="kpi-sub" id="kpiTodaySub">0 de 0 tareas de hoy</div>
+        <div class="kpi-sub" id="kpiTodaySub">0 de 0 tareas</div>
       </div>
       <div class="kpi-card success">
-        <div class="kpi-label">Racha actual</div>
+        <div class="kpi-label">Racha</div>
         <div class="kpi-value" id="kpiStreak">0<small> días</small></div>
-        <div class="kpi-sub">con cumplimiento al 100%</div>
+        <div class="kpi-sub">días hábiles seguidos al 100%</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Actividades activas</div>
+        <div class="kpi-label">Actividades</div>
         <div class="kpi-value" id="kpiTotalTasks">0</div>
         <div class="kpi-sub" id="kpiTotalSub">en control</div>
       </div>
     </div>
 
-    <h3 class="section-title"><span class="n">2</span> Reporte general de actividades</h3>
+    <h3 class="section-title"><span class="n">2</span> Actividades</h3>
     <div class="dash-grid">
       <div class="card">
-        <div class="panel-title">Cumplimiento por actividad <span>completadas / esperadas</span></div>
+        <div class="panel-title">Cumplimiento por actividad <span>cumplidas / esperadas</span></div>
         <div id="barChart"></div>
         <div class="empty-state small" id="barChartEmpty" hidden><p>Registra actividades para ver este indicador.</p></div>
       </div>
       <div class="card">
-        <div class="panel-title">Últimos 14 días</div>
-        <div class="streak-visual" id="streakVisual"></div>
-        <p class="field-hint" style="margin-top:0.8rem;">Verde = todo cumplido, rojo = quedó pendiente, gris = sin tareas programadas.</p>
+        <div class="panel-title">Últimas 2 semanas <span>toca un día</span></div>
+        <div class="week-grid" id="streakVisual"></div>
+        <div class="legend">
+          <span><i style="background:var(--stamp-ink)"></i>Completo</span>
+          <span><i style="background:rgba(229,89,95,0.5)"></i>Faltó algo</span>
+          <span><i style="background:rgba(227,179,79,0.4)"></i>Hoy en curso</span>
+          <span><i style="background:var(--field);border:1px solid var(--panel-border)"></i>Sin tareas</span>
+        </div>
       </div>
     </div>
-    <div class="card" style="margin-top:1.1rem;">
-      <div class="panel-title">Detalle por actividad</div>
-      <table class="summary-table" id="summaryTable">
-        <thead><tr><th>Actividad</th><th>Frecuencia</th><th>Cumplidas</th><th>Esperadas</th><th>% Cumplimiento</th></tr></thead>
-        <tbody id="summaryTableBody"></tbody>
-      </table>
+    <div class="card" style="margin-top:0.9rem;">
+      <div class="panel-title">Detalle por actividad <span>toca un encabezado para ordenar</span></div>
+      <div class="table-wrap">
+        <table class="summary-table">
+          <thead><tr>
+            <th><button type="button" data-sort="name">Actividad</button></th>
+            <th><button type="button" data-sort="freq">Frecuencia</button></th>
+            <th><button type="button" data-sort="comp">Cumplidas</button></th>
+            <th><button type="button" data-sort="exp">Esperadas</button></th>
+            <th><button type="button" data-sort="pct">%</button></th>
+          </tr></thead>
+          <tbody id="summaryTableBody"></tbody>
+        </table>
+      </div>
       <div class="empty-state small" id="summaryEmpty" hidden><p>Sin datos todavía.</p></div>
     </div>
 
-    <h3 class="section-title"><span class="n">3</span> Reporte por frecuencia</h3>
-    <p class="section-sub">% de cumplimiento agregado para cada tipo de frecuencia.</p>
+    <h3 class="section-title"><span class="n">3</span> Por frecuencia</h3>
     <div class="card">
       <div id="freqReportChart"></div>
       <div class="empty-state small" id="freqReportEmpty" hidden><p>Registra actividades para ver este indicador.</p></div>
     </div>
 
-    <h3 class="section-title"><span class="n">4</span> Tasa de cumplimiento — actividades diarias</h3>
-    <div class="kpi-grid" style="grid-template-columns:repeat(3, 1fr);">
+    <h3 class="section-title"><span class="n">4</span> Actividades diarias</h3>
+    <div class="kpi-grid">
       <div class="kpi-card accent">
-        <div class="kpi-label">Tasa de cumplimiento diaria</div>
+        <div class="kpi-label">Tasa de cumplimiento</div>
         <div class="kpi-value" id="kpiDailyRate">0<small>%</small></div>
-        <div class="kpi-sub" id="kpiDailyRateSub">0 de 0 revisiones esperadas</div>
+        <div class="kpi-sub" id="kpiDailyRateSub">0 de 0 días hábiles</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Actividades diarias activas</div>
+        <div class="kpi-label">Diarias activas</div>
         <div class="kpi-value" id="kpiDailyCount">0</div>
       </div>
       <div class="kpi-card teal">
-        <div class="kpi-label">Cumplidas hoy (diarias)</div>
+        <div class="kpi-label">Cumplidas hoy</div>
         <div class="kpi-value" id="kpiDailyToday">0<small> / 0</small></div>
       </div>
     </div>
 
-    <h3 class="section-title"><span class="n">5</span> Actividades diarias más descuidadas</h3>
-    <p class="section-sub">Las actividades diarias con menor porcentaje de cumplimiento histórico.</p>
-    <div class="card" id="neglectedCard">
+    <h3 class="section-title"><span class="n">5</span> Diarias más descuidadas</h3>
+    <div class="card">
       <div id="neglectedList"></div>
       <div class="empty-state small" id="neglectedEmpty" hidden><p>No hay actividades diarias registradas todavía.</p></div>
     </div>
 
-    <h3 class="section-title"><span class="n">6</span> Actividades mensuales dejadas de hacer</h3>
-    <p class="section-sub">Actividades mensuales con al menos un ciclo sin cumplir, y cuántos meses llevan sin realizarse.</p>
-    <div class="card" id="monthlyNeglectedCard">
+    <h3 class="section-title"><span class="n">6</span> Mensuales dejadas de hacer</h3>
+    <div class="card">
       <div id="monthlyNeglectedList"></div>
       <div class="empty-state small" id="monthlyNeglectedEmpty" hidden><p>Todas las actividades mensuales están al día.</p></div>
     </div>
 
     <h3 class="section-title"><span class="n">7</span> Alertas de procrastinación</h3>
-    <p class="section-sub">Actividades con retrasos consecutivos que requieren atención.</p>
-    <div class="card" id="alertsCard">
+    <div class="card">
       <div id="alertsList"></div>
-      <div class="empty-state small" id="alertsEmpty" hidden><p>No hay alertas de procrastinación por ahora. Buen trabajo.</p></div>
+      <div class="empty-state small" id="alertsEmpty" hidden><p>No hay alertas por ahora. Buen trabajo.</p></div>
     </div>
 
-    <h3 class="section-title"><span class="n">8</span> Antigüedad de tareas «una sola vez» pendientes</h3>
-    <p class="section-sub">Tiempo transcurrido desde la fecha de creación de las tareas de una sola vez que aún no se cumplen.</p>
-    <div class="card" id="ageCard">
+    <h3 class="section-title"><span class="n">8</span> Antigüedad de pendientes «una vez»</h3>
+    <p class="section-sub">Días hábiles transcurridos desde su inicio.</p>
+    <div class="card">
       <div id="ageBuckets"></div>
       <div class="empty-state small" id="ageEmpty" hidden><p>No hay tareas de una sola vez pendientes.</p></div>
     </div>
-
   </section>
 
 </main>
 
-<footer class="app-footer">
-  Los datos se guardan y se sincronizan de forma segura en la nube mediante Firebase.
-</footer>
+<!-- ===================== VENTANA: AGREGAR ACTIVIDAD ===================== -->
+<dialog class="add-dialog" id="addDialog" aria-labelledby="h-registro">
+  <div class="dlg-head">
+    <div class="panel-icon"><svg class="i"><use href="#i-plus"/></svg></div>
+    <div class="panel-titles">
+      <h2 id="h-registro">Agregar actividad</h2>
+      <p id="dlgSub">Qué controlar y cada cuánto</p>
+    </div>
+    <button class="icon-btn" type="button" id="closeAdd" aria-label="Cerrar" title="Cerrar (Esc)"><svg class="i"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="dlg-body" id="dlgBody">
+    <div id="dtab-form">
+    <form class="card task-form" id="taskForm" novalidate>
+      <div class="edit-banner" id="editBanner" hidden>
+        <span>Editando: <strong id="editingName"></strong></span>
+        <button type="button" class="btn btn-ghost btn-sm" id="cancelEditBtn">Cancelar edición</button>
+      </div>
 
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
+      <div class="field span-full">
+        <label for="taskName">Nombre de la actividad</label>
+        <input type="text" id="taskName" name="taskName" placeholder="Ej. Revisar reporte de ventas" required maxlength="80" autocomplete="off" aria-describedby="nameError">
+        <p class="field-error" id="nameError" hidden>Escribe un nombre para la actividad.</p>
+      </div>
+
+      <fieldset class="field span-full">
+        <legend>Frecuencia de revisión</legend>
+        <div class="chips">
+          <label class="chip"><input type="radio" name="taskFreq" value="diaria" checked><span>Diaria<small>lun a vie</small></span></label>
+          <label class="chip"><input type="radio" name="taskFreq" value="semanal"><span>Semanal<small>cada 7 días</small></span></label>
+          <label class="chip"><input type="radio" name="taskFreq" value="quincenal"><span>Quincenal<small>cada 15 días</small></span></label>
+          <label class="chip"><input type="radio" name="taskFreq" value="mensual"><span>Mensual<small>cada 30 días</small></span></label>
+          <label class="chip"><input type="radio" name="taskFreq" value="una_vez"><span>Una vez<small>hasta cumplirla</small></span></label>
+        </div>
+        <p class="field-hint">Si una revisión cae en sábado o domingo, pasa al lunes siguiente.</p>
+      </fieldset>
+
+      <div class="field">
+        <label for="taskStart">Inicia el</label>
+        <input type="date" id="taskStart" name="taskStart" style="color-scheme:dark">
+      </div>
+      <div class="schedule-preview" id="schedulePreview" aria-live="polite"></div>
+
+      <div class="field span-full">
+        <div class="field-row">
+          <label for="taskNotes">Nota adicional (opcional)</label>
+          <span class="char-count" id="notesCount">0/240</span>
+        </div>
+        <textarea id="taskNotes" name="taskNotes" placeholder="Detalles, criterio de cumplimiento, enlaces..." maxlength="240"></textarea>
+      </div>
+
+      <div class="form-actions">
+        <button type="reset" class="btn btn-ghost">Limpiar</button>
+        <button type="submit" class="btn btn-primary" id="submitBtn">Guardar actividad</button>
+      </div>
+    </form>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"><span id="toastMsg"></span><button type="button" class="toast-action" id="toastAction" hidden></button></div>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-  import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+  import {
+    initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
+    collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch
+  } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBUGKrovHvyCwDFam9wFPkV_nNRDU3XBFk",
@@ -620,179 +917,444 @@
   };
 
   const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+  let db;
+  try {
+    db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+  } catch (err) {
+    console.warn("Caché persistente no disponible, se usa memoria:", err);
+    db = getFirestore(app);
+  }
 
-  /* ---------------------------------------------------------
-     Persistencia (Firebase Firestore)
-     Colecciones: "tasks" (doc id = task.id) y
-     "completions" (doc id = `${taskId}|${dateISO}`, { completado:true })
-  --------------------------------------------------------- */
-  let tasks = [];
-  let completions = {}; // key: `${taskId}|${dateISO}` -> true
-
-  /* ---------------------------------------------------------
-     Utilidades de fecha
-  --------------------------------------------------------- */
+  /* =========================================================
+     Constantes y utilidades de fecha
+  ========================================================= */
   const FREQ_ORDER = ["diaria","semanal","quincenal","mensual","una_vez"];
   const FREQ = {
     diaria:    { label:"Diaria",       interval:1  },
     semanal:   { label:"Semanal",      interval:7  },
     quincenal: { label:"Quincenal",    interval:15 },
     mensual:   { label:"Mensual",      interval:30 },
-    una_vez:   { label:"Una sola vez", interval:null }
+    una_vez:   { label:"Una vez",      interval:null }
   };
   const DAY_MS = 86400000;
+  const RING_C = 2 * Math.PI * 26;
+  const EMPTY_SET = new Set();
+  const $ = (sel) => document.querySelector(sel);
 
-  function toISODate(d){
-    const y = d.getFullYear();
-    const m = String(d.getMonth()+1).padStart(2,"0");
-    const day = String(d.getDate()).padStart(2,"0");
-    return `${y}-${m}-${day}`;
-  }
-  function todayISO(){ return toISODate(new Date()); }
-  function parseISODate(iso){
-    const [y,m,d] = iso.split("-").map(Number);
-    return new Date(y, m-1, d);
-  }
-  function daysBetween(isoA, isoB){
-    return Math.round((parseISODate(isoB) - parseISODate(isoA)) / DAY_MS);
-  }
-  function addDaysISO(iso, n){
-    const d = parseISODate(iso);
-    d.setDate(d.getDate() + n);
-    return toISODate(d);
-  }
-  function formatLongDate(iso){
-    return parseISODate(iso).toLocaleDateString("es-CO", { weekday:"long", day:"numeric", month:"long", year:"numeric" });
-  }
-  function normalizeText(str){
-    return String(str).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
-  }
+  const fmtLong  = new Intl.DateTimeFormat("es-CO", { weekday:"long", day:"numeric", month:"long", year:"numeric" });
+  const fmtShort = new Intl.DateTimeFormat("es-CO", { weekday:"short", day:"numeric", month:"short" });
+  const fmtDay   = new Intl.DateTimeFormat("es-CO", { day:"numeric", month:"short", year:"numeric" });
+  const fmtTime  = new Intl.DateTimeFormat("es-CO", { hour:"2-digit", minute:"2-digit" });
 
-  function getCompletionDates(taskId){
-    const prefix = taskId + "|";
-    return Object.keys(completions).filter(k=> k.startsWith(prefix) && completions[k]).map(k=> k.slice(prefix.length));
-  }
-  function isDueOn(task, iso){
-    if (iso < task.start) return false;
-    if (task.freq === "una_vez"){
-      const dates = getCompletionDates(task.id);
-      if (dates.length) return dates.includes(iso);
-      return true;
+  // Fechas como "número de día" (días desde 1970-01-01, UTC): cálculos rápidos y sin líos de horario.
+  const dnCache = new Map();
+  function dn(iso){
+    let v = dnCache.get(iso);
+    if (v === undefined){
+      v = Math.round(Date.UTC(+iso.slice(0,4), +iso.slice(5,7) - 1, +iso.slice(8,10)) / DAY_MS);
+      dnCache.set(iso, v);
     }
-    const interval = FREQ[task.freq].interval;
-    const diff = daysBetween(task.start, iso);
-    return diff >= 0 && diff % interval === 0;
+    return v;
   }
-  function isDone(taskId, iso){ return !!completions[`${taskId}|${iso}`]; }
+  const isoFromDn = (n) => new Date(n * DAY_MS).toISOString().slice(0,10);
+  const daysBetween = (a, b) => dn(b) - dn(a);
+  const toISODate = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const todayISO = () => toISODate(new Date());
+  const localDate = (iso) => new Date(+iso.slice(0,4), +iso.slice(5,7) - 1, +iso.slice(8,10));
+  const formatLong = (iso) => fmtLong.format(localDate(iso));
+  const formatShort = (iso) => fmtShort.format(localDate(iso));
+  const formatDay = (iso) => fmtDay.format(localDate(iso));
 
-  async function setDone(taskId, iso, value){
-    const key = `${taskId}|${iso}`;
-    // actualización optimista: refleja el cambio de inmediato en la interfaz
-    if (value) completions[key] = true; else delete completions[key];
-    renderChecklist();
-    if (document.getElementById("dashboard").classList.contains("is-active")) renderDashboard();
+  /* ---- Días hábiles (lunes a viernes) ---- */
+  const dow = (x) => ((x + 4) % 7 + 7) % 7;                       // 0 = domingo … 6 = sábado
+  const isWdDn = (x) => { const d = dow(x); return d >= 1 && d <= 5; };
+  const toWd = (x) => { const d = dow(x); return d === 6 ? x + 2 : d === 0 ? x + 1 : x; };   // fin de semana → lunes
+  const prevWd = (x) => { const d = dow(x); return d === 6 ? x - 1 : d === 0 ? x - 2 : x; }; // fin de semana → viernes
+  function wdCount(a, b){                                           // días hábiles en [a, b]
+    if (b < a) return 0;
+    const n = b - a + 1, w = Math.floor(n / 7);
+    let c = w * 5;
+    for (let i = a + w * 7; i <= b; i++) if (isWdDn(i)) c++;
+    return c;
+  }
+  const DOW_NAMES = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
 
-    try{
-      const docRef = doc(db, "completions", key);
-      if (value) await setDoc(docRef, { completado:true });
-      else await deleteDoc(docRef);
-    }catch(err){
-      console.error("Error sincronizando el checklist con Firebase:", err);
-      showToast("Error de conexión al guardar");
+  function relLabel(iso){
+    const d = daysBetween(state.today, iso);
+    if (d === 0) return "Hoy";
+    if (d === -1) return "Ayer";
+    if (d === 1) return "Mañana";
+    return d < 0 ? `Hace ${-d} días` : `En ${d} días`;
+  }
+  const normalizeText = (s) => String(s).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim();
+  const ESC = { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" };
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
+  const pctClass = (p) => p >= 80 ? "" : (p >= 50 ? "mid" : "low");
+  const plural = (n, a, b) => n === 1 ? a : b;
+  function debounce(fn, ms){ let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
+  /* =========================================================
+     Estado
+  ========================================================= */
+  const state = {
+    tasks: [],
+    compIndex: new Map(),        // taskId -> Set(fechas ISO cumplidas)
+    loaded: { tasks:false, comps:false },
+    pending: { tasks:false, comps:false },
+    view: "checklist",
+    today: todayISO(),
+    viewDate: todayISO(),
+    freqFilter: "all",
+    search: "",
+    registrySearch: "",
+    editingId: null,
+    justStamped: null,
+    flashId: null,
+    sort: { key:"pct", dir:"asc" }
+  };
+
+  /* =========================================================
+     Programación y cumplimiento (solo días hábiles)
+     - Diaria: todos los días de lunes a viernes.
+     - Semanal / quincenal / mensual: cada N días desde la fecha de inicio;
+       si la fecha cae en fin de semana, se pasa al lunes.
+     - Una vez: aparece desde su inicio (o el lunes, si inicia en fin de semana).
+  ========================================================= */
+  const doneSet = (id) => state.compIndex.get(id) || EMPTY_SET;
+  const isDone = (id, iso) => doneSet(id).has(iso);
+  const ivOf = (t) => FREQ[t.freq].interval;
+  const occDn = (t, k) => toWd(dn(t.start) + k * ivOf(t));     // fecha real de la ocurrencia k
+
+  // Índice de la última ocurrencia en o antes de "ud" (-1 si no hay)
+  function lastIdx(t, ud){
+    let k = Math.floor((ud - dn(t.start)) / ivOf(t));
+    if (k < 0) return -1;
+    if (occDn(t, k) > ud) k--;
+    return k;
+  }
+
+  function isDueDn(t, x){
+    if (!isWdDn(x)) return false;
+    const sd = dn(t.start);
+    if (t.freq === "una_vez"){
+      const s = doneSet(t.id);
+      return s.size ? s.has(isoFromDn(x)) : x >= toWd(sd);
     }
-  }
-  function expectedOccurrences(task, uptoISO){
-    if (task.freq === "una_vez") return uptoISO >= task.start ? 1 : 0;
-    const interval = FREQ[task.freq].interval;
-    const diff = daysBetween(task.start, uptoISO);
-    if (diff < 0) return 0;
-    return Math.floor(diff / interval) + 1;
-  }
-  function completedOccurrences(task){
-    let count = 0;
-    for (const key in completions){
-      if (key.startsWith(task.id + "|") && completions[key]) count++;
+    if (t.freq === "diaria") return x >= sd;
+    const iv = ivOf(t), offsets = dow(x) === 1 ? 3 : 1;  // un lunes también recibe lo del sábado/domingo
+    for (let o = 0; o < offsets; o++){
+      const n = x - o;
+      if (n >= sd && (n - sd) % iv === 0) return true;
     }
-    return count;
+    return false;
   }
-  function pctFor(task, uptoISO){
-    const exp = expectedOccurrences(task, uptoISO);
-    const comp = completedOccurrences(task);
-    return exp ? Math.min(Math.round((comp/exp)*100), 100) : 0;
+
+  // ¿Cuenta para decidir si un día quedó completo? (una vez pendiente solo pesa hoy)
+  function countsForDay(t, x){
+    if (t.freq !== "una_vez") return isDueDn(t, x);
+    if (!isWdDn(x)) return false;
+    const s = doneSet(t.id);
+    return s.size ? s.has(isoFromDn(x)) : (x === dn(state.today) && x >= toWd(dn(t.start)));
   }
-  // ciclos consecutivos sin cumplir, contando hacia atrás desde el más reciente
-  function computeMissedCycles(task, uptoISO){
-    if (task.freq === "una_vez") return 0;
-    const interval = FREQ[task.freq].interval;
-    const totalOcc = expectedOccurrences(task, uptoISO);
+
+  function expectedOccurrences(t, upto){
+    const sd = dn(t.start), ud = dn(upto);
+    if (t.freq === "una_vez") return ud >= toWd(sd) ? 1 : 0;
+    if (t.freq === "diaria") return wdCount(sd, ud);
+    return lastIdx(t, ud) + 1;
+  }
+  // Solo cuenta cumplimientos en fechas programadas (nunca supera el 100 %)
+  function completedOccurrences(t, upto){
+    const s = doneSet(t.id);
+    if (!s.size) return 0;
+    if (t.freq === "una_vez"){ for (const d of s) if (d <= upto) return 1; return 0; }
+    const ud = dn(upto);
+    let c = 0;
+    for (const d of s){ const x = dn(d); if (x <= ud && isDueDn(t, x)) c++; }
+    return c;
+  }
+  function computeMissedCycles(t, upto){
+    const ud = dn(upto), sd = dn(t.start);
     let missed = 0;
-    for (let idx = totalOcc - 1; idx >= 0; idx--){
-      const occISO = addDaysISO(task.start, idx * interval);
-      if (isDone(task.id, occISO)) break;
+    if (t.freq === "una_vez") return 0;
+    if (t.freq === "diaria"){
+      for (let x = prevWd(ud), i = 0; x >= sd && i < 400; x = prevWd(x - 1), i++){
+        if (isDone(t.id, isoFromDn(x))) break;
+        missed++;
+      }
+      return missed;
+    }
+    for (let k = lastIdx(t, ud); k >= 0; k--){
+      if (isDone(t.id, isoFromDn(occDn(t, k)))) break;
       missed++;
     }
     return missed;
   }
-
-  /* ---------------------------------------------------------
-     Toast
-  --------------------------------------------------------- */
-  let toastTimer = null;
-  function showToast(msg){
-    const el = document.getElementById("toast");
-    el.textContent = msg;
-    el.classList.add("show");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(()=> el.classList.remove("show"), 2400);
+  // Última fecha programada ANTES de "iso" (para "Atrasadas")
+  function previousOccurrence(t, iso){
+    const x = dn(iso), sd = dn(t.start);
+    if (t.freq === "una_vez") return null;
+    if (t.freq === "diaria"){ const p = prevWd(x - 1); return p >= sd ? isoFromDn(p) : null; }
+    const k = lastIdx(t, x - 1);
+    return k >= 0 ? isoFromDn(occDn(t, k)) : null;
+  }
+  function nextDue(t){
+    const td = dn(state.today), sd = dn(t.start);
+    if (t.freq === "una_vez"){
+      const s = doneSet(t.id);
+      if (s.size) return { done:true, iso:[...s].sort()[0] };
+      const es = toWd(sd);
+      return { iso:isoFromDn(es), overdueDays: td > es ? wdCount(es, td) - 1 : 0 };
+    }
+    if (t.freq === "diaria") return { iso:isoFromDn(toWd(Math.max(td, sd))) };
+    if (td <= sd) return { iso:isoFromDn(occDn(t, 0)) };
+    let k = Math.floor((td - sd) / ivOf(t));
+    if (occDn(t, k) < td) k++;
+    return { iso:isoFromDn(occDn(t, k)) };
+  }
+  function computeStreak(){
+    const tasks = state.tasks;
+    if (!tasks.length) return 0;
+    const earliest = Math.min(...tasks.map((t) => dn(t.start)));
+    const td = dn(state.today);
+    let streak = 0;
+    for (let x = prevWd(td), i = 0; x >= earliest && i < 600; x = prevWd(x - 1), i++){
+      const due = tasks.filter((t) => countsForDay(t, x));
+      if (!due.length) continue;
+      const iso = isoFromDn(x);
+      if (due.every((t) => isDone(t.id, iso))) streak++;
+      else if (x === td) continue;   // hoy aún no termina: no rompe la racha
+      else break;
+    }
+    return streak;
   }
 
-  /* ---------------------------------------------------------
-     Reloj de cabecera
-  --------------------------------------------------------- */
+  /* =========================================================
+     Escrituras en Firestore
+  ========================================================= */
+  function reportError(msg){ return (err) => { console.error(msg, err); showToast(msg, { type:"error", duration:4000 }); }; }
+  function commitOps(ops){
+    const commits = [];
+    for (let i = 0; i < ops.length; i += 450){
+      const b = writeBatch(db);
+      ops.slice(i, i + 450).forEach((o) => o.data ? b.set(o.ref, o.data) : b.delete(o.ref));
+      commits.push(b.commit());
+    }
+    return Promise.all(commits);
+  }
+  function toggleDone(taskId, iso, { silent = false } = {}){
+    if (iso > state.today){ showToast("No puedes marcar un día futuro", { type:"error" }); return; }
+    const key = `${taskId}|${iso}`;
+    const willBeDone = !isDone(taskId, iso);
+    const ref = doc(db, "completions", key);
+    (willBeDone ? setDoc(ref, { completado:true }) : deleteDoc(ref)).catch(reportError("No se pudo guardar el cambio"));
+    if (willBeDone){
+      state.justStamped = key;
+      setTimeout(() => { if (state.justStamped === key) state.justStamped = null; }, 700);
+    }
+    if (!silent){
+      showToast(willBeDone ? "Marcada como cumplida" : "Marcada como pendiente", {
+        action:"Deshacer", onAction: () => toggleDone(taskId, iso, { silent:true })
+      });
+    }
+  }
+
+  /* =========================================================
+     Toast con "Deshacer"
+  ========================================================= */
+  let toastTimer = null, toastHandler = null;
+  const toastEl = $("#toast"), toastMsg = $("#toastMsg"), toastAction = $("#toastAction");
+  function showToast(msg, { action, onAction, type, duration = 3000 } = {}){
+    const host = document.getElementById("addDialog")?.open ? document.getElementById("addDialog") : document.body;
+    if (toastEl.parentElement !== host) host.appendChild(toastEl);
+    toastMsg.textContent = msg;
+    toastEl.classList.toggle("error", type === "error");
+    toastHandler = onAction || null;
+    toastAction.hidden = !action;
+    if (action) toastAction.textContent = action;
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove("show"), action ? Math.max(duration, 5000) : duration);
+  }
+  toastAction.addEventListener("click", () => {
+    const fn = toastHandler; toastHandler = null;
+    toastEl.classList.remove("show");
+    if (fn) fn();
+  });
+
+  /* =========================================================
+     Reloj / cambio de día / conexión
+  ========================================================= */
   function tickClock(){
     const now = new Date();
-    document.getElementById("clockTime").textContent = now.toLocaleTimeString("es-CO", { hour:"2-digit", minute:"2-digit" });
-    document.getElementById("clockDate").textContent = now.toLocaleDateString("es-CO", { weekday:"long", day:"numeric", month:"long", year:"numeric" });
+    $("#clockTime").textContent = fmtTime.format(now);
+    $("#clockDate").textContent = fmtLong.format(now);
+    const t = toISODate(now);
+    if (t !== state.today){
+      const wasToday = state.viewDate === state.today;
+      state.today = t;
+      if (wasToday) state.viewDate = t;
+      if (!state.editingId) taskStartInput.value = t;
+      scheduleRender();
+    }
   }
-  tickClock();
-  setInterval(tickClock, 30000);
+  function renderSync(){
+    const el = $("#syncStatus");
+    let cls, txt;
+    if (!navigator.onLine){ cls = "offline"; txt = "Sin conexión"; }
+    else if (!state.loaded.tasks || !state.loaded.comps){ cls = "saving"; txt = "Conectando…"; }
+    else if (state.pending.tasks || state.pending.comps){ cls = "saving"; txt = "Guardando…"; }
+    else { cls = "ok"; txt = "Sincronizado"; }
+    el.className = "sync-pill " + cls;
+    el.textContent = txt;
+    el.title = cls === "offline" ? "Los cambios se guardan en este dispositivo y se sincronizan al volver la conexión" : "";
+  }
+  window.addEventListener("online", renderSync);
+  window.addEventListener("offline", renderSync);
 
-  /* ---------------------------------------------------------
-     Navegación por pestañas
-  --------------------------------------------------------- */
-  const tabButtons = document.querySelectorAll(".tab-btn");
-  const views = document.querySelectorAll(".view");
-  function goToTab(target){
-    tabButtons.forEach(btn=> btn.setAttribute("aria-selected", btn.dataset.target === target ? "true" : "false"));
-    views.forEach(v=>{
-      const active = v.id === target;
-      v.classList.toggle("is-active", active);
-      v.hidden = !active;
+  /* =========================================================
+     Render (un solo render por frame, solo paneles visibles)
+  ========================================================= */
+  const isVisible = (id) => state.view === id;
+  const addDialog = document.getElementById("addDialog");
+  let renderQueued = false;
+  function scheduleRender(){
+    if (renderQueued) return;
+    renderQueued = true;
+    requestAnimationFrame(() => {
+      renderQueued = false;
+      renderSync();
+      renderTabBadge();
+      if (isVisible("actividades")) renderRegistry();
+      if (isVisible("checklist")) renderChecklist();
+      if (isVisible("dashboard")) renderDashboard();
     });
-    if (target === "checklist") renderChecklist();
-    if (target === "dashboard") renderDashboard();
   }
-  tabButtons.forEach(btn=> btn.addEventListener("click", ()=> goToTab(btn.dataset.target)));
-  document.querySelectorAll("[data-goto]").forEach(btn=> btn.addEventListener("click", ()=> goToTab(btn.dataset.goto)));
+  function renderTabBadge(){
+    const badge = $("#tabBadge");
+    if (!state.loaded.tasks || !state.loaded.comps){ badge.hidden = true; return; }
+    const td = dn(state.today);
+    const pending = state.tasks.filter((t) => isDueDn(t, td) && !isDone(t.id, state.today)).length;
+    badge.hidden = pending === 0;
+    badge.textContent = pending;
+  }
 
-  /* ---------------------------------------------------------
-     Formulario de registro
-  --------------------------------------------------------- */
-  const taskForm = document.getElementById("taskForm");
-  const taskStartInput = document.getElementById("taskStart");
-  taskStartInput.value = todayISO();
+  /* =========================================================
+     Vista única con selector por iconos
+  ========================================================= */
+  const VIEWS = ["checklist","actividades","dashboard"];
+  const workspace = $("#workspace");
+  const switchButtons = [...document.querySelectorAll(".vs-btn[data-view]")];
 
-  taskForm.addEventListener("submit", async function(e){
+  function goToView(view){
+    if (view === "registro"){ view = "checklist"; setTimeout(() => openAdd(), 0); }
+    if (!VIEWS.includes(view)) view = "checklist";
+    state.view = view;
+    workspace.dataset.view = view;
+    switchButtons.forEach((b) => b.setAttribute("aria-pressed", b.dataset.view === view ? "true" : "false"));
+    VIEWS.forEach((p) => { document.getElementById(p).hidden = p !== view; });
+    if (location.hash !== "#" + view) history.replaceState(null, "", "#" + view);
+    scheduleRender();
+  }
+  switchButtons.forEach((b) => b.addEventListener("click", () => {
+    goToView(b.dataset.view);
+    window.scrollTo({ top:0 });
+  }));
+  document.addEventListener("click", (e) => {
+    const g = e.target.closest("[data-go]");
+    if (g){ goToView(g.dataset.go); window.scrollTo({ top:0 }); return; }
+    if (e.target.closest("[data-open-add]")) openAdd();
+  });
+
+  /* ---- Ventana emergente ---- */
+  function openAdd(){
+    if (state.editingId) exitEditMode(true);
+    $("#h-registro").textContent = "Agregar actividad";
+    $("#dlgSub").textContent = "Qué controlar y cada cuánto";
+    if (!addDialog.open) addDialog.showModal();
+    $("#dlgBody").scrollTop = 0;
+    requestAnimationFrame(() => nameInput.focus());
+  }
+  $("#openAdd").addEventListener("click", () => openAdd());
+  $("#closeAdd").addEventListener("click", () => addDialog.close());
+  addDialog.addEventListener("click", (e) => { if (e.target === addDialog) addDialog.close(); });   // clic fuera = cerrar
+  addDialog.addEventListener("close", () => {
+    if (state.editingId) exitEditMode(true);
+    document.body.appendChild(toastEl);
+    $("#openAdd").focus({ preventScroll:true });
+  });
+  window.addEventListener("hashchange", () => goToView(location.hash.slice(1)));
+
+  /* =========================================================
+     Registrar: formulario (crear / editar)
+  ========================================================= */
+  const taskForm = $("#taskForm");
+  const nameInput = $("#taskName");
+  const taskStartInput = $("#taskStart");
+  const notesInput = $("#taskNotes");
+  taskStartInput.value = state.today;
+
+  const getFormFreq = () => taskForm.elements.taskFreq.value;
+  function setFormFreq(v){ taskForm.querySelectorAll('input[name="taskFreq"]').forEach((r) => { r.checked = r.value === v; }); }
+
+  function whenText(iso){
+    const r = relLabel(iso);
+    return ["Hoy","Mañana","Ayer"].includes(r) ? `${r.toLowerCase()} (${formatShort(iso)})` : formatShort(iso);
+  }
+  function updatePreview(){
+    const freq = getFormFreq();
+    const start = taskStartInput.value || state.today;
+    const t = { id:"__preview", freq, start };
+    const first = isoFromDn(toWd(dn(start)));
+    const moved = first !== start ? " (pasó al lunes por ser fin de semana)" : "";
+    let txt;
+    if (freq === "una_vez") txt = `aparece ${whenText(first)}${moved} y queda pendiente hasta que la marques.`;
+    else if (freq === "diaria") txt = `${whenText(first)}${moved}, y luego de lunes a viernes.`;
+    else txt = `${whenText(first)}${moved}, luego cada ${FREQ[freq].interval} días (siguiente: ${formatShort(isoFromDn(occDn(t, 1)))}).`;
+    $("#schedulePreview").innerHTML = `<span><strong>Primera revisión:</strong>${esc(txt)}</span>`;
+  }
+  function updateNotesCount(){ $("#notesCount").textContent = `${notesInput.value.length}/240`; }
+
+  taskForm.addEventListener("change", updatePreview);
+  taskStartInput.addEventListener("input", updatePreview);
+  notesInput.addEventListener("input", updateNotesCount);
+  nameInput.addEventListener("input", () => {
+    if (nameInput.value.trim()){ nameInput.removeAttribute("aria-invalid"); $("#nameError").hidden = true; }
+  });
+  taskForm.addEventListener("reset", () => {
+    setTimeout(() => {
+      if (state.editingId) exitEditMode(false);
+      taskStartInput.value = state.today;
+      nameInput.removeAttribute("aria-invalid"); $("#nameError").hidden = true;
+      updatePreview(); updateNotesCount();
+    });
+  });
+
+  taskForm.addEventListener("submit", (e) => {
     e.preventDefault();
-    const name = document.getElementById("taskName").value.trim();
-    const freq = document.getElementById("taskFreq").value;
-    const notes = document.getElementById("taskNotes").value.trim();
-    const start = taskStartInput.value || todayISO();
+    const name = nameInput.value.trim();
+    const freq = getFormFreq();
+    const notes = notesInput.value.trim();
+    const start = taskStartInput.value || state.today;
 
     if (!name){
-      showToast("Escribe un nombre para la actividad");
-      document.getElementById("taskName").focus();
+      nameInput.setAttribute("aria-invalid", "true");
+      $("#nameError").hidden = false;
+      nameInput.focus();
+      return;
+    }
+
+    if (state.editingId){
+      const existing = state.tasks.find((t) => t.id === state.editingId);
+      if (!existing){ exitEditMode(true); return; }
+      const scheduleChanged = existing.freq !== freq || existing.start !== start;
+      if (scheduleChanged && doneSet(existing.id).size &&
+          !confirm("Cambiaste la frecuencia o la fecha de inicio. Los cumplimientos ya registrados que no coincidan con la nueva programación dejarán de contar en los reportes. ¿Continuar?")) return;
+      const updated = { ...existing, name, freq, notes, start, updatedAt:new Date().toISOString() };
+      setDoc(doc(db, "tasks", existing.id), updated).catch(reportError("No se pudo actualizar la actividad"));
+      state.flashId = existing.id;
+      addDialog.close();
+      showToast("Actividad actualizada");
       return;
     }
 
@@ -801,481 +1363,563 @@
       name, freq, notes, start,
       createdAt: new Date().toISOString()
     };
-
-    // actualización optimista: se ve en la interfaz antes de confirmar el guardado en la nube
-    tasks.push(task);
+    setDoc(doc(db, "tasks", task.id), task).catch(reportError("No se pudo guardar en Firebase"));
+    state.flashId = task.id;
     taskForm.reset();
-    taskStartInput.value = todayISO();
-    renderRegistry();
-    renderChecklist();
-
-    try{
-      showToast("Guardando en la nube...");
-      await setDoc(doc(db, "tasks", task.id), task);
-      showToast("Actividad guardada");
-    }catch(err){
-      console.error("Error al guardar la actividad en Firebase:", err);
-      showToast("Error guardando en Firebase");
-    }
+    const dueToday = isDueDn(task, dn(state.today));
+    addDialog.close();
+    showToast(dueToday ? "Guardada · ya está en el checklist de hoy" : "Actividad guardada", {
+      action:"Agregar otra", onAction: () => openAdd()
+    });
   });
 
-  async function deleteTask(id){
-    if (!confirm("¿Eliminar esta actividad y su historial de cumplimiento?")) return;
-    const keysToDelete = Object.keys(completions).filter(key=> key.startsWith(id + "|"));
+  function enterEditMode(id){
+    const t = state.tasks.find((x) => x.id === id);
+    if (!t) return;
+    state.editingId = id;
+    nameInput.value = t.name;
+    setFormFreq(t.freq);
+    taskStartInput.value = t.start;
+    notesInput.value = t.notes || "";
+    $("#editingName").textContent = t.name;
+    $("#editBanner").hidden = true;
+    $("#submitBtn").textContent = "Actualizar";
+    taskForm.classList.add("editing");
+    updatePreview(); updateNotesCount();
+    $("#h-registro").textContent = "Editar actividad";
+    $("#dlgSub").textContent = t.name;
+    if (!addDialog.open) addDialog.showModal();
+    $("#dlgBody").scrollTop = 0;
+    requestAnimationFrame(() => nameInput.focus());
+    scheduleRender();
+  }
+  function exitEditMode(clear){
+    state.editingId = null;
+    $("#editBanner").hidden = true;
+    $("#submitBtn").textContent = "Guardar actividad";
+    taskForm.classList.remove("editing");
+    if (clear) taskForm.reset();
+    scheduleRender();
+  }
+  $("#cancelEditBtn").addEventListener("click", () => addDialog.close());
 
-    tasks = tasks.filter(t=> t.id !== id);
-    keysToDelete.forEach(key=> delete completions[key]);
-    renderRegistry();
-    renderChecklist();
-
-    try{
-      await deleteDoc(doc(db, "tasks", id));
-      for (const key of keysToDelete){
-        await deleteDoc(doc(db, "completions", key));
+  function deleteTask(id){
+    const task = state.tasks.find((t) => t.id === id);
+    if (!task) return;
+    const keys = [...doneSet(id)].map((d) => `${id}|${d}`);
+    if (state.editingId === id) exitEditMode(true);
+    commitOps([
+      { ref: doc(db, "tasks", id) },
+      ...keys.map((k) => ({ ref: doc(db, "completions", k) }))
+    ]).catch(reportError("No se pudo eliminar en Firebase"));
+    showToast(`«${task.name}» eliminada`, {
+      action:"Deshacer", duration:7000,
+      onAction: () => {
+        commitOps([
+          { ref: doc(db, "tasks", id), data: task },
+          ...keys.map((k) => ({ ref: doc(db, "completions", k), data: { completado:true } }))
+        ]).catch(reportError("No se pudo restaurar la actividad"));
+        showToast("Actividad restaurada");
       }
-      showToast("Actividad eliminada");
-    }catch(err){
-      console.error("Error eliminando la actividad en Firebase:", err);
-      showToast("Error eliminando en Firebase");
-    }
+    });
   }
 
-  /* ---------------------------------------------------------
-     Render: Registro
-  --------------------------------------------------------- */
-  function renderRegistry(){
-    const list = document.getElementById("registryList");
-    const empty = document.getElementById("registryEmpty");
-    document.getElementById("registryCount").textContent = tasks.length;
+  $("#registrySearch").addEventListener("input", debounce((e) => { state.registrySearch = e.target.value; scheduleRender(); }, 120));
+  $("#regFreq").addEventListener("change", (e) => { state.regFreq = e.target.value; scheduleRender(); });
+  $("#regSort").addEventListener("change", (e) => { state.regSort = e.target.value; scheduleRender(); });
 
-    if (tasks.length === 0){ list.innerHTML = ""; empty.hidden = false; return; }
+  function renderRegistry(){
+    const list = $("#registryList"), empty = $("#registryEmpty");
+    if (!state.loaded.tasks || !state.loaded.comps) return;
+    const tasks = state.tasks, today = state.today;
+    $("#registryCount").textContent = tasks.length;
+    if (!tasks.length){ list.innerHTML = ""; empty.hidden = false; $("#regSummary").textContent = ""; return; }
     empty.hidden = true;
 
-    list.innerHTML = tasks.slice().reverse().map(t=> `
-      <div class="task-row">
+    const q = normalizeText(state.registrySearch || "");
+    const fq = state.regFreq || "all";
+    let rows = tasks
+      .filter((t) => (fq === "all" || t.freq === fq) && (!q || normalizeText(t.name + " " + (t.notes || "")).includes(q)))
+      .map((t, i) => {
+        const exp = expectedOccurrences(t, today), comp = completedOccurrences(t, today);
+        return { t, i, nd: nextDue(t), exp, comp, pct: exp ? Math.min(100, Math.round(comp / exp * 100)) : null };
+      });
+    const sort = state.regSort || "recent";
+    rows.sort((a, b) =>
+      sort === "name" ? normalizeText(a.t.name).localeCompare(normalizeText(b.t.name)) :
+      sort === "next" ? (a.nd.done ? 1 : 0) - (b.nd.done ? 1 : 0) || a.nd.iso.localeCompare(b.nd.iso) :
+      sort === "pct"  ? (a.pct ?? 101) - (b.pct ?? 101) :
+      b.i - a.i);
+
+    const counts = FREQ_ORDER.map((k) => [k, tasks.filter((t) => t.freq === k).length]).filter(([, n]) => n);
+    $("#regSummary").textContent = (rows.length !== tasks.length ? `${rows.length} de ${tasks.length} · ` : "") +
+      counts.map(([k, n]) => `${n} ${FREQ[k].label.toLowerCase()}`).join(" · ");
+
+    if (!rows.length){ list.innerHTML = `<div class="empty-state small"><p>Ninguna actividad coincide con la búsqueda.</p></div>`; return; }
+
+    list.innerHTML = rows.map(({ t, nd, exp, comp, pct }) => {
+      let when;
+      if (nd.done) when = `Cumplida el ${formatDay(nd.iso)}`;
+      else if (t.freq === "una_vez") when = nd.overdueDays ? `Pendiente hace <b>${nd.overdueDays} ${plural(nd.overdueDays,"día hábil","días hábiles")}</b>` : (nd.iso > today ? `Aparece: <b>${relLabel(nd.iso)}</b>` : "Pendiente desde <b>hoy</b>");
+      else when = `Próxima: <b>${relLabel(nd.iso)}</b>${daysBetween(today, nd.iso) > 1 ? " · " + formatShort(nd.iso) : ""}`;
+      const cls = ["task-row", state.flashId === t.id ? "flash" : "", state.editingId === t.id ? "is-editing" : ""].join(" ");
+      return `<div class="${cls}">
         <div class="task-main">
-          <div class="task-name">${escapeHTML(t.name)}</div>
-          <div class="task-meta">Inicia ${formatLongDate(t.start)}${t.notes ? " · " + escapeHTML(t.notes) : ""}</div>
+          <div class="task-name">${esc(t.name)}</div>
+          <div class="task-meta">${when} · desde ${formatDay(t.start)}</div>
+          ${t.notes ? `<div class="task-note" title="${esc(t.notes)}">${esc(t.notes)}</div>` : ""}
+          <div class="task-pct">
+            <div class="bar-track"><div class="bar-fill ${pct === null ? "" : pctClass(pct)}" style="width:${pct ?? 0}%"></div></div>
+            <span>${pct === null ? "sin revisiones aún" : `${pct}% · ${comp}/${exp}`}</span>
+          </div>
         </div>
-        <span class="badge badge-${t.freq}">${FREQ[t.freq].label}</span>
-        <button class="btn btn-danger-ghost" data-delete="${t.id}" aria-label="Eliminar ${escapeHTML(t.name)}">Eliminar</button>
-      </div>`).join("");
-
-    list.querySelectorAll("[data-delete]").forEach(btn=> btn.addEventListener("click", ()=> deleteTask(btn.dataset.delete)));
-  }
-
-  /* ---------------------------------------------------------
-     Módulo 2: filtros (frecuencia + búsqueda)
-  --------------------------------------------------------- */
-  let freqFilter = "all";
-  let searchQuery = "";
-  const freqFilterSelect = document.getElementById("freqFilter");
-  const taskSearchInput = document.getElementById("taskSearch");
-  freqFilterSelect.addEventListener("change", ()=>{ freqFilter = freqFilterSelect.value; renderChecklist(); });
-  taskSearchInput.addEventListener("input", ()=>{ searchQuery = taskSearchInput.value; renderChecklist(); });
-  document.getElementById("clearFiltersBtn").addEventListener("click", ()=>{
-    freqFilter = "all"; searchQuery = "";
-    freqFilterSelect.value = "all"; taskSearchInput.value = "";
-    renderChecklist();
-  });
-
-  function matchesFilters(t){
-    const freqOk = freqFilter === "all" || t.freq === freqFilter;
-    const searchOk = !searchQuery.trim() || normalizeText(t.name).includes(normalizeText(searchQuery));
-    return freqOk && searchOk;
-  }
-
-  /* ---------------------------------------------------------
-     Render: Checklist (módulo 2)
-  --------------------------------------------------------- */
-  function renderChecklist(){
-    const today = todayISO();
-    document.getElementById("checklistDateLabel").textContent = "Hoy es " + formatLongDate(today) + ". Marca cada actividad conforme la realices.";
-
-    const dueTasks = tasks.filter(t=> isDueOn(t, today));
-    const dueDoneAll = dueTasks.filter(t=> isDone(t.id, today));
-
-    // Datos generales: siempre sobre el total del día, sin filtrar, para no perder el panorama.
-    document.getElementById("statDueToday").textContent = dueTasks.length;
-    document.getElementById("statDoneToday").textContent = dueDoneAll.length;
-    document.getElementById("statPendingToday").textContent = dueTasks.length - dueDoneAll.length;
-    document.getElementById("statPctToday").textContent = dueTasks.length ? Math.round((dueDoneAll.length/dueTasks.length)*100) + "%" : "—";
-
-    // Datos por frecuencia
-    const freqGrid = document.getElementById("freqWidgetGrid");
-    freqGrid.innerHTML = FREQ_ORDER.map(key=>{
-      const inFreq = tasks.filter(t=> t.freq === key);
-      const dueInFreq = inFreq.filter(t=> isDueOn(t, today));
-      const doneInFreq = dueInFreq.filter(t=> isDone(t.id, today));
-      const pct = dueInFreq.length ? Math.round((doneInFreq.length/dueInFreq.length)*100) : 0;
-      const cls = pct >= 80 ? "" : (pct >= 50 ? "mid" : "low");
-      return `<div class="freq-widget">
-        <div class="fw-head">
-          <span class="fw-title">${FREQ[key].label}</span>
-          <span class="fw-count">${inFreq.length} activas</span>
+        <div class="row-actions">
+          <span class="badge badge-${t.freq}">${FREQ[t.freq].label}</span>
+          <button class="icon-btn" type="button" data-edit="${esc(t.id)}" aria-label="Editar ${esc(t.name)}" title="Editar"><svg class="i"><use href="#i-edit"/></svg></button>
+          <button class="icon-btn danger" type="button" data-delete="${esc(t.id)}" aria-label="Eliminar ${esc(t.name)}" title="Eliminar"><svg class="i"><use href="#i-trash"/></svg></button>
         </div>
-        <div class="fw-pct">${dueInFreq.length ? pct + "%" : "—"}</div>
-        <div class="fw-detail">${doneInFreq.length} de ${dueInFreq.length} hoy</div>
-        <div class="bar-track"><div class="bar-fill ${cls}" style="width:${dueInFreq.length ? pct : 0}%"></div></div>
       </div>`;
     }).join("");
+    state.flashId = null;
+  }
+  $("#registryList").addEventListener("click", (e) => {
+    const ed = e.target.closest("[data-edit]");
+    if (ed) return enterEditMode(ed.dataset.edit);
+    const del = e.target.closest("[data-delete]");
+    if (del) deleteTask(del.dataset.delete);
+  });
 
-    // Listas filtradas (frecuencia + búsqueda)
-    const dueTasksFiltered = dueTasks.filter(matchesFilters);
-    const pending = dueTasksFiltered.filter(t=> !isDone(t.id, today));
-    const done = dueTasksFiltered.filter(t=> isDone(t.id, today));
+  /* =========================================================
+     Checklist
+  ========================================================= */
+  const freqFilterSelect = $("#freqFilter");
+  const taskSearchInput = $("#taskSearch");
+  freqFilterSelect.addEventListener("change", () => { state.freqFilter = freqFilterSelect.value; scheduleRender(); });
+  taskSearchInput.addEventListener("input", debounce(() => { state.search = taskSearchInput.value; scheduleRender(); }, 120));
+  $("#clearFiltersBtn").addEventListener("click", () => {
+    state.freqFilter = "all"; state.search = "";
+    freqFilterSelect.value = "all"; taskSearchInput.value = "";
+    scheduleRender();
+  });
 
-    const activeFilters = freqFilter !== "all" || searchQuery.trim() !== "";
-    const filterCountEl = document.getElementById("filterCount");
-    filterCountEl.textContent = activeFilters ? `${dueTasksFiltered.length} de ${dueTasks.length} tareas de hoy coinciden` : "";
+  // Las flechas saltan fines de semana
+  function shiftDay(n){
+    let x = dn(state.viewDate) + n;
+    while (!isWdDn(x)) x += n;
+    state.viewDate = isoFromDn(x);
+    scheduleRender();
+  }
+  $("#prevDay").addEventListener("click", () => shiftDay(-1));
+  $("#nextDay").addEventListener("click", () => shiftDay(1));
+  $("#goFriday").addEventListener("click", () => shiftDay(-1));
+  $("#goMonday").addEventListener("click", () => shiftDay(1));
+  $("#todayBtn").addEventListener("click", () => { state.viewDate = state.today; scheduleRender(); });
+  $("#dateJump").addEventListener("change", (e) => { if (e.target.value){ state.viewDate = e.target.value; scheduleRender(); } });
 
-    document.getElementById("checklistEmpty").hidden = tasks.length !== 0;
+  const matchesFilters = (t) =>
+    (state.freqFilter === "all" || t.freq === state.freqFilter) &&
+    (!state.search.trim() || normalizeText(t.name).includes(normalizeText(state.search)));
 
-    renderCheckGroup("pendingList", "pendingEmpty", pending, today, false, dueTasks.length > 0 && dueTasksFiltered.length === 0 && activeFilters);
-    renderCheckGroup("doneList", "doneEmpty", done, today, true, false);
-
-    // listado completo de actividades (respeta los filtros)
-    const allList = document.getElementById("allTasksList");
-    const allFiltered = tasks.filter(matchesFilters);
-    if (tasks.length === 0){
-      allList.innerHTML = `<p class="field-hint">No hay actividades registradas.</p>`;
-    } else if (allFiltered.length === 0){
-      allList.innerHTML = `<p class="field-hint">Ninguna actividad coincide con el filtro aplicado.</p>`;
-    } else {
-      allList.innerHTML = allFiltered.map(t=>{
-        const due = isDueOn(t, today);
-        return `<div class="task-row">
-          <div class="task-main">
-            <div class="task-name">${escapeHTML(t.name)}</div>
-            <div class="task-meta">${due ? "Programada para hoy" : "No programada hoy"}</div>
-          </div>
+  function checkItemHTML(t, iso, done, { overdue = false, disabled = false } = {}){
+    const key = `${t.id}|${iso}`;
+    const cls = ["check-item", done ? "done" : "", overdue ? "overdue-item" : "", disabled ? "is-disabled" : "", state.justStamped === key ? "just-stamped" : ""].join(" ");
+    const status = overdue ? `Vencía ${relLabel(iso).toLowerCase()} · ${formatShort(iso)}` : (done ? "Verificado" : (disabled ? "Programada" : "Sin verificar"));
+    return `<div class="${cls}" data-item="${esc(t.id)}" data-date="${iso}">
+      <button class="stamp-btn" type="button" ${disabled ? "disabled" : ""} aria-pressed="${done}"
+        aria-label="Marcar ${esc(t.name)} como ${done ? "pendiente" : "cumplida"}">
+        <span aria-hidden="true">${done ? "" : "＋"}</span>
+        <span class="stamp-ink-mark" aria-hidden="true">Cumplido</span>
+      </button>
+      <div class="item-main">
+        <div class="item-name">${esc(t.name)}</div>
+        <div class="item-meta">
           <span class="badge badge-${t.freq}">${FREQ[t.freq].label}</span>
-        </div>`;
-      }).join("");
-    }
+          <span class="item-status">${status}</span>
+        </div>
+        ${t.notes ? `<div class="item-note">${esc(t.notes)}</div>` : ""}
+      </div>
+    </div>`;
   }
 
-  function renderCheckGroup(listId, emptyId, list, today, doneState, filteredToEmpty){
-    const container = document.getElementById(listId);
-    const empty = document.getElementById(emptyId);
-    if (list.length === 0){
+  function renderChecklist(){
+    const v = state.viewDate, today = state.today, vx = dn(v);
+    const isToday = v === today, isFuture = v > today, weekend = !isWdDn(vx);
+
+    $("#dayRel").textContent = relLabel(v);
+    $("#dayLabel").textContent = formatLong(v);
+    $("#todayBtn").hidden = isToday;
+    $("#dateJump").value = v;
+    $("#weekendNote").hidden = !weekend;
+    $("#weekendDay").textContent = DOW_NAMES[dow(vx)];
+    $("#futureNote").hidden = !isFuture || weekend;
+    $("#pastNote").hidden = v >= today || weekend;
+
+    const hasFilters = state.freqFilter !== "all" || state.search.trim() !== "";
+    $("#clearFiltersBtn").hidden = !hasFilters;
+    freqFilterSelect.value = state.freqFilter;
+
+    if (!state.loaded.tasks || !state.loaded.comps) return;
+    const tasks = state.tasks;
+    $("#checklistEmpty").hidden = tasks.length !== 0;
+
+    const due = tasks.filter((t) => isDueDn(t, vx));
+    const doneAll = due.filter((t) => isDone(t.id, v));
+    const pct = due.length ? Math.round(doneAll.length / due.length * 100) : null;
+
+    $("#statDue").textContent = due.length;
+    $("#statDone").textContent = doneAll.length;
+    $("#statPending").textContent = due.length - doneAll.length;
+    $("#statPct").textContent = pct === null ? "—" : pct + "%";
+    const ring = $("#ringFg");
+    ring.style.strokeDashoffset = String(RING_C * (1 - (pct || 0) / 100));
+    ring.style.stroke = pct === null ? "var(--panel-border)" : (pct >= 80 ? "var(--teal)" : pct >= 50 ? "var(--accent)" : "var(--danger)");
+
+    const complete = due.length > 0 && doneAll.length === due.length && !isFuture;
+    $("#celebrate").hidden = !complete;
+    if (complete) $("#celebrateText").textContent = isToday ? "¡Día completo! Cumpliste todo lo programado para hoy." : "Este día quedó completo.";
+
+    $("#freqWidgetGrid").innerHTML = FREQ_ORDER.map((key) => {
+      const inFreq = tasks.filter((t) => t.freq === key).length;
+      const d = due.filter((t) => t.freq === key);
+      const dd = d.filter((t) => isDone(t.id, v)).length;
+      const p = d.length ? Math.round(dd / d.length * 100) : 0;
+      return `<button type="button" class="freq-widget ${state.freqFilter === key ? "active" : ""}" data-freq="${key}" aria-pressed="${state.freqFilter === key}">
+        <div class="fw-head"><span class="fw-title">${FREQ[key].label}</span><span class="fw-count">${inFreq} act.</span></div>
+        <div class="fw-pct">${d.length ? p + "%" : "—"}</div>
+        <div class="fw-detail">${dd} de ${d.length} este día</div>
+        <div class="bar-track"><div class="bar-fill ${pctClass(p)}" style="width:${d.length ? p : 0}%"></div></div>
+      </button>`;
+    }).join("");
+
+    // Atrasadas: solo al ver hoy (también en fin de semana, para ponerse al día con el viernes)
+    const overdue = isToday ? tasks.filter(matchesFilters)
+      .map((t) => ({ t, iso: previousOccurrence(t, today) }))
+      .filter((r) => r.iso && !isDone(r.t.id, r.iso)) : [];
+    $("#overdueGroup").hidden = overdue.length === 0;
+    $("#overdueCount").textContent = overdue.length ? `(${overdue.length})` : "";
+    $("#overdueList").innerHTML = overdue.map((r) => checkItemHTML(r.t, r.iso, false, { overdue:true })).join("");
+
+    const filtered = due.filter(matchesFilters);
+    const pending = filtered.filter((t) => !isDone(t.id, v));
+    const done = filtered.filter((t) => isDone(t.id, v));
+    $("#filterCount").textContent = hasFilters ? `${filtered.length} de ${due.length} coinciden` : "";
+    $("#pendingCount").textContent = pending.length ? `(${pending.length})` : "";
+    $("#doneCount").textContent = done.length ? `(${done.length})` : "";
+
+    const pendingMsg = weekend ? "Fin de semana: no hay revisiones programadas."
+      : hasFilters && due.length && !filtered.length ? "Ninguna actividad coincide con el filtro."
+      : (due.length ? "¡Nada pendiente para este día!" : "No hay actividades programadas para este día.");
+    renderGroup("#pendingList", "#pendingEmpty", pending, v, false, isFuture, pendingMsg);
+    renderGroup("#doneList", "#doneEmpty", done, v, true, isFuture,
+      isFuture ? "Aún no se puede marcar este día." : (weekend ? "—" : "Aún no has marcado ninguna como cumplida."));
+    if (!tasks.length){ $("#pendingEmpty").hidden = true; $("#doneEmpty").hidden = true; }
+  }
+
+  function renderGroup(listSel, emptySel, list, iso, doneState, disabled, emptyMsg){
+    const container = $(listSel), empty = $(emptySel);
+    if (!list.length){
       container.innerHTML = "";
       empty.hidden = false;
-      empty.querySelector("p").textContent = filteredToEmpty
-        ? "Ninguna actividad pendiente coincide con el filtro aplicado."
-        : (doneState ? "Aún no has marcado ninguna actividad como cumplida hoy." : "No tienes actividades pendientes por revisar hoy.");
+      empty.querySelector("p").textContent = emptyMsg;
       return;
     }
     empty.hidden = true;
-    container.innerHTML = list.map(t=> `
-      <div class="check-item ${doneState ? 'done' : ''}" data-item="${t.id}">
-        <button class="stamp-btn" type="button" data-toggle="${t.id}" aria-pressed="${doneState}"
-          aria-label="Marcar ${escapeHTML(t.name)} como ${doneState ? 'pendiente' : 'cumplida'}">
-          <span aria-hidden="true">${doneState ? '' : '＋'}</span>
-          <span class="stamp-ink-mark" aria-hidden="true">Cumplido</span>
-        </button>
-        <div class="item-main">
-          <div class="item-name">${escapeHTML(t.name)}</div>
-          <div class="item-meta">
-            <span class="badge badge-${t.freq}">${FREQ[t.freq].label}</span>
-            <span class="item-status">${doneState ? 'Verificado hoy' : 'Sin verificar'}</span>
-          </div>
-          ${t.notes ? `<div class="item-note">${escapeHTML(t.notes)}</div>` : ""}
-        </div>
-      </div>`).join("");
-
-    container.querySelectorAll("[data-toggle]").forEach(btn=>{
-      btn.addEventListener("click", ()=>{
-        const id = btn.dataset.toggle;
-        const newValue = !isDone(id, today);
-        setDone(id, today, newValue);
-        showToast(newValue ? "Marcada como cumplida" : "Marcada como pendiente");
-        renderChecklist();
-      });
-    });
+    container.innerHTML = list.map((t) => checkItemHTML(t, iso, doneState, { disabled })).join("");
   }
 
-  /* ---------------------------------------------------------
-     Módulo 3: Reportes
-  --------------------------------------------------------- */
-  function computeStreak(taskList){
-    if (taskList.length === 0) return 0;
-    let streak = 0;
-    const earliestStart = taskList.reduce((min,t)=> t.start < min ? t.start : min, taskList[0].start);
-    for (let i = 0; i < 400; i++){
-      const d = new Date(); d.setDate(d.getDate() - i);
-      const iso = toISODate(d);
-      if (iso < earliestStart) break;
-      const due = taskList.filter(t=> isDueOn(t, iso));
-      if (due.length === 0) continue;
-      if (!due.every(t=> isDone(t.id, iso))) break;
-      streak++;
+  $("#checklist").addEventListener("click", (e) => {
+    const fw = e.target.closest("[data-freq]");
+    if (fw){
+      state.freqFilter = state.freqFilter === fw.dataset.freq ? "all" : fw.dataset.freq;
+      scheduleRender();
+      return;
     }
-    return streak;
-  }
+    const item = e.target.closest(".check-item");
+    if (!item || item.classList.contains("is-disabled")) return;
+    toggleDone(item.dataset.item, item.dataset.date);
+  });
+
+  /* =========================================================
+     Reportes
+  ========================================================= */
+  document.querySelector(".summary-table thead").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sort]");
+    if (!b) return;
+    const key = b.dataset.sort;
+    state.sort = { key, dir: state.sort.key === key && state.sort.dir === "asc" ? "desc" : "asc" };
+    scheduleRender();
+  });
+  $("#streakVisual").addEventListener("click", (e) => {
+    const c = e.target.closest("[data-day]");
+    if (!c) return;
+    state.viewDate = c.dataset.day;
+    goToView("checklist");
+    window.scrollTo({ top:0 });
+  });
 
   function renderDashboard(){
-    const today = todayISO();
+    if (!state.loaded.tasks || !state.loaded.comps) return;
+    const today = state.today, td = dn(today), tasks = state.tasks;
+    const weekendToday = !isWdDn(td);
 
-    /* 1. Resumen general */
-    document.getElementById("kpiTotalTasks").textContent = tasks.length;
-    document.getElementById("kpiTotalSub").textContent = tasks.length === 1 ? "actividad" : "actividades";
+    const rows = tasks.map((t) => {
+      const exp = expectedOccurrences(t, today), comp = completedOccurrences(t, today);
+      return { t, exp, comp, pct: exp ? Math.min(100, Math.round(comp / exp * 100)) : 0 };
+    });
 
-    let totalExpected = 0, totalCompleted = 0;
-    tasks.forEach(t=>{ totalExpected += expectedOccurrences(t, today); totalCompleted += completedOccurrences(t); });
-    const globalPct = totalExpected ? Math.round((totalCompleted/totalExpected)*100) : 0;
-    document.getElementById("kpiGlobalPct").innerHTML = globalPct + "<small>%</small>";
-    document.getElementById("kpiGlobalSub").textContent = `${totalCompleted} de ${totalExpected} revisiones esperadas`;
+    /* 1. Resumen */
+    $("#kpiTotalTasks").textContent = tasks.length;
+    $("#kpiTotalSub").textContent = plural(tasks.length, "actividad en control", "actividades en control");
+    const totalExp = rows.reduce((s, r) => s + r.exp, 0), totalComp = rows.reduce((s, r) => s + r.comp, 0);
+    $("#kpiGlobalPct").innerHTML = (totalExp ? Math.round(totalComp / totalExp * 100) : 0) + "<small>%</small>";
+    $("#kpiGlobalSub").textContent = `${totalComp} de ${totalExp} revisiones en días hábiles`;
+    if (weekendToday){
+      $("#kpiTodayPct").innerHTML = "—";
+      $("#kpiTodaySub").textContent = "Fin de semana · no cuenta";
+    } else {
+      const dueToday = tasks.filter((t) => isDueDn(t, td));
+      const doneToday = dueToday.filter((t) => isDone(t.id, today)).length;
+      $("#kpiTodayPct").innerHTML = (dueToday.length ? Math.round(doneToday / dueToday.length * 100) : 0) + "<small>%</small>";
+      $("#kpiTodaySub").textContent = `${doneToday} de ${dueToday.length} tareas de hoy`;
+    }
+    const streak = computeStreak();
+    $("#kpiStreak").innerHTML = streak + `<small> ${plural(streak, "día", "días")}</small>`;
 
-    const dueToday = tasks.filter(t=> isDueOn(t, today));
-    const doneToday = dueToday.filter(t=> isDone(t.id, today));
-    const todayPct = dueToday.length ? Math.round((doneToday.length/dueToday.length)*100) : 0;
-    document.getElementById("kpiTodayPct").innerHTML = todayPct + "<small>%</small>";
-    document.getElementById("kpiTodaySub").textContent = `${doneToday.length} de ${dueToday.length} tareas de hoy`;
+    /* 2. Barras por actividad */
+    $("#barChartEmpty").hidden = tasks.length > 0;
+    $("#barChart").innerHTML = rows.slice().sort((a, b) => b.pct - a.pct).map((r) => `
+      <div class="bar-row">
+        <div class="bar-label" title="${esc(r.t.name)}">${esc(r.t.name)}</div>
+        <div class="bar-track"><div class="bar-fill ${pctClass(r.pct)}" style="width:${r.pct}%"></div></div>
+        <div class="bar-pct">${r.pct}%</div>
+      </div>`).join("");
 
-    document.getElementById("kpiStreak").innerHTML = computeStreak(tasks) + "<small> días</small>";
+    /* Últimas 2 semanas hábiles (L a V) */
+    const lastWd = prevWd(td);
+    const monday = lastWd - (dow(lastWd) - 1) - 7;
+    let cells = ["L","M","X","J","V"].map((d) => `<div class="wk-head">${d}</div>`).join("");
+    for (let w = 0; w < 2; w++){
+      for (let d = 0; d < 5; d++){
+        const x = monday + w * 7 + d, iso = isoFromDn(x);
+        if (x > td){
+          cells += `<button type="button" class="streak-day future" disabled aria-label="${formatShort(iso)}: aún no llega">${+iso.slice(8)}</button>`;
+          continue;
+        }
+        const dueX = tasks.filter((t) => countsForDay(t, x));
+        const ok = dueX.filter((t) => isDone(t.id, iso)).length;
+        let cls = "";
+        if (dueX.length) cls = ok === dueX.length ? "hit" : (x === td ? "partial" : "miss");
+        const label = `${formatShort(iso)}: ${dueX.length ? `${ok} de ${dueX.length} cumplidas` : "sin tareas"}`;
+        cells += `<button type="button" class="streak-day ${cls} ${x === td ? "today" : ""}" data-day="${iso}" title="${label}" aria-label="${label}">${+iso.slice(8)}</button>`;
+      }
+    }
+    $("#streakVisual").innerHTML = cells;
 
-    /* 2. Reporte general de actividades */
-    const barChart = document.getElementById("barChart");
-    const barEmpty = document.getElementById("barChartEmpty");
-    if (tasks.length === 0){ barChart.innerHTML = ""; barEmpty.hidden = false; }
+    /* Tabla ordenable */
+    $("#summaryEmpty").hidden = tasks.length > 0;
+    const { key, dir } = state.sort;
+    const sorted = rows.slice().sort((a, b) => {
+      let va, vb;
+      if (key === "name"){ va = normalizeText(a.t.name); vb = normalizeText(b.t.name); }
+      else if (key === "freq"){ va = FREQ_ORDER.indexOf(a.t.freq); vb = FREQ_ORDER.indexOf(b.t.freq); }
+      else { va = a[key]; vb = b[key]; }
+      return (va < vb ? -1 : va > vb ? 1 : 0) * (dir === "asc" ? 1 : -1);
+    });
+    document.querySelectorAll(".summary-table [data-sort]").forEach((b) => {
+      const base = b.textContent.replace(/ [▲▼]$/, "");
+      if (b.dataset.sort === key){
+        b.setAttribute("aria-sort", dir === "asc" ? "ascending" : "descending");
+        b.textContent = base + (dir === "asc" ? " ▲" : " ▼");
+      } else { b.removeAttribute("aria-sort"); b.textContent = base; }
+    });
+    $("#summaryTableBody").innerHTML = sorted.map((r) =>
+      `<tr><td>${esc(r.t.name)}</td><td>${FREQ[r.t.freq].label}</td><td class="num">${r.comp}</td><td class="num">${r.exp}</td><td class="num">${r.pct}%</td></tr>`
+    ).join("");
+
+    /* 3. Por frecuencia */
+    const freqRows = FREQ_ORDER.map((k) => {
+      const rs = rows.filter((r) => r.t.freq === k);
+      const exp = rs.reduce((s, r) => s + r.exp, 0), comp = rs.reduce((s, r) => s + r.comp, 0);
+      return { k, count: rs.length, pct: exp ? Math.round(comp / exp * 100) : null };
+    }).filter((r) => r.count > 0);
+    $("#freqReportEmpty").hidden = freqRows.length > 0;
+    $("#freqReportChart").innerHTML = freqRows.map((r) => {
+      const p = r.pct ?? 0;
+      return `<div class="bar-row">
+        <div class="bar-label">${FREQ[r.k].label} <span style="color:var(--ink-faint)">(${r.count})</span></div>
+        <div class="bar-track"><div class="bar-fill ${pctClass(p)}" style="width:${p}%"></div></div>
+        <div class="bar-pct">${r.pct === null ? "—" : r.pct + "%"}</div>
+      </div>`;
+    }).join("");
+
+    /* 4. Diarias */
+    const daily = rows.filter((r) => r.t.freq === "diaria");
+    const dExp = daily.reduce((s, r) => s + r.exp, 0), dComp = daily.reduce((s, r) => s + r.comp, 0);
+    $("#kpiDailyRate").innerHTML = (dExp ? Math.round(dComp / dExp * 100) : 0) + "<small>%</small>";
+    $("#kpiDailyRateSub").textContent = `${dComp} de ${dExp} revisiones en días hábiles`;
+    $("#kpiDailyCount").textContent = daily.length;
+    if (weekendToday) $("#kpiDailyToday").innerHTML = `—<small> fin de semana</small>`;
     else {
-      barEmpty.hidden = true;
-      const rows = tasks.map(t=> ({ name:t.name, pct: pctFor(t, today) })).sort((a,b)=> b.pct - a.pct);
-      barChart.innerHTML = rows.map(r=>{
-        const cls = r.pct >= 80 ? "" : (r.pct >= 50 ? "mid" : "low");
-        return `<div class="bar-row">
-          <div class="bar-label" title="${escapeHTML(r.name)}">${escapeHTML(r.name)}</div>
-          <div class="bar-track"><div class="bar-fill ${cls}" style="width:${r.pct}%"></div></div>
-          <div class="bar-pct">${r.pct}%</div>
-        </div>`;
-      }).join("");
+      const act = daily.filter((r) => dn(r.t.start) <= td);
+      $("#kpiDailyToday").innerHTML = `${act.filter((r) => isDone(r.t.id, today)).length}<small> / ${act.length}</small>`;
     }
 
-    const streakVisual = document.getElementById("streakVisual");
-    let cells = "";
-    for (let i = 13; i >= 0; i--){
-      const d = new Date(); d.setDate(d.getDate() - i);
-      const iso = toISODate(d);
-      const due = tasks.filter(t=> isDueOn(t, iso));
-      let cls = "";
-      if (due.length > 0) cls = due.every(t=> isDone(t.id, iso)) ? "hit" : "miss";
-      cells += `<div class="streak-day ${cls}" title="${iso}"></div>`;
-    }
-    streakVisual.innerHTML = cells;
+    /* 5. Diarias más descuidadas */
+    $("#neglectedEmpty").hidden = daily.length > 0;
+    $("#neglectedList").innerHTML = daily.slice().sort((a, b) => a.pct - b.pct).slice(0, 5).map((r, i) => `
+      <div class="rank-row">
+        <div class="rank-badge">${i + 1}</div>
+        <div class="rank-main">
+          <div class="rank-name">${esc(r.t.name)}</div>
+          <div class="rank-detail">${r.comp} de ${r.exp} días hábiles</div>
+        </div>
+        <div class="rank-pct ${r.pct >= 80 ? "high" : r.pct >= 50 ? "mid" : "low"}">${r.pct}%</div>
+      </div>`).join("");
 
-    const tbody = document.getElementById("summaryTableBody");
-    const summaryEmpty = document.getElementById("summaryEmpty");
-    if (tasks.length === 0){ tbody.innerHTML = ""; summaryEmpty.hidden = false; }
-    else {
-      summaryEmpty.hidden = true;
-      tbody.innerHTML = tasks.map(t=>{
-        const exp = expectedOccurrences(t, today), comp = completedOccurrences(t);
-        return `<tr><td>${escapeHTML(t.name)}</td><td>${FREQ[t.freq].label}</td><td class="num">${comp}</td><td class="num">${exp}</td><td class="num">${pctFor(t, today)}%</td></tr>`;
-      }).join("");
-    }
+    /* 6. Mensuales dejadas de hacer */
+    const monthly = tasks.filter((t) => t.freq === "mensual")
+      .map((t) => ({ t, missed: computeMissedCycles(t, today) }))
+      .filter((r) => r.missed >= 1).sort((a, b) => b.missed - a.missed);
+    $("#monthlyNeglectedEmpty").hidden = monthly.length > 0;
+    $("#monthlyNeglectedList").innerHTML = monthly.map((r) => `
+      <div class="alert-item">
+        <div class="alert-main">
+          <div class="alert-name">${esc(r.t.name)}</div>
+          <div class="alert-detail">${r.missed} ${plural(r.missed, "ciclo", "ciclos")} sin realizarse</div>
+        </div>
+        <span class="badge ${r.missed >= 2 ? "badge-sev-alta" : "badge-sev-media"}">${r.missed >= 2 ? "Alta" : "Media"}</span>
+      </div>`).join("");
 
-    /* 3. Reporte por frecuencia */
-    const freqChart = document.getElementById("freqReportChart");
-    const freqEmpty = document.getElementById("freqReportEmpty");
-    const freqRows = FREQ_ORDER.map(key=>{
-      const inFreq = tasks.filter(t=> t.freq === key);
-      let exp = 0, comp = 0;
-      inFreq.forEach(t=>{ exp += expectedOccurrences(t, today); comp += completedOccurrences(t); });
-      const pct = exp ? Math.round((comp/exp)*100) : null;
-      return { key, count: inFreq.length, exp, comp, pct };
-    }).filter(r=> r.count > 0);
-
-    if (freqRows.length === 0){ freqChart.innerHTML = ""; freqEmpty.hidden = false; }
-    else {
-      freqEmpty.hidden = true;
-      freqChart.innerHTML = freqRows.map(r=>{
-        const pct = r.pct === null ? 0 : r.pct;
-        const cls = pct >= 80 ? "" : (pct >= 50 ? "mid" : "low");
-        return `<div class="bar-row">
-          <div class="bar-label">${FREQ[r.key].label} <span style="color:var(--ink-faint)">(${r.count})</span></div>
-          <div class="bar-track"><div class="bar-fill ${cls}" style="width:${pct}%"></div></div>
-          <div class="bar-pct">${r.pct === null ? "—" : r.pct + "%"}</div>
-        </div>`;
-      }).join("");
-    }
-
-    /* 4. Tasa de cumplimiento diaria */
-    const dailyTasks = tasks.filter(t=> t.freq === "diaria");
-    let dailyExp = 0, dailyComp = 0;
-    dailyTasks.forEach(t=>{ dailyExp += expectedOccurrences(t, today); dailyComp += completedOccurrences(t); });
-    const dailyRate = dailyExp ? Math.round((dailyComp/dailyExp)*100) : 0;
-    document.getElementById("kpiDailyRate").innerHTML = dailyRate + "<small>%</small>";
-    document.getElementById("kpiDailyRateSub").textContent = `${dailyComp} de ${dailyExp} revisiones esperadas`;
-    document.getElementById("kpiDailyCount").textContent = dailyTasks.length;
-    const dailyDoneToday = dailyTasks.filter(t=> isDone(t.id, today)).length;
-    document.getElementById("kpiDailyToday").innerHTML = `${dailyDoneToday}<small> / ${dailyTasks.length}</small>`;
-
-    /* 5. Actividades diarias más descuidadas */
-    const neglectedList = document.getElementById("neglectedList");
-    const neglectedEmpty = document.getElementById("neglectedEmpty");
-    if (dailyTasks.length === 0){ neglectedList.innerHTML = ""; neglectedEmpty.hidden = false; }
-    else {
-      neglectedEmpty.hidden = true;
-      const ranked = dailyTasks.map(t=> ({ t, pct: pctFor(t, today), exp: expectedOccurrences(t, today), comp: completedOccurrences(t) }))
-        .sort((a,b)=> a.pct - b.pct).slice(0, 5);
-      neglectedList.innerHTML = ranked.map((r,i)=>{
-        const cls = r.pct >= 80 ? "high" : (r.pct >= 50 ? "mid" : "low");
-        return `<div class="rank-row">
-          <div class="rank-badge">${i+1}</div>
-          <div class="rank-main">
-            <div class="rank-name">${escapeHTML(r.t.name)}</div>
-            <div class="rank-detail">${r.comp} de ${r.exp} días cumplidos</div>
-          </div>
-          <div class="rank-pct ${cls}">${r.pct}%</div>
-        </div>`;
-      }).join("");
-    }
-
-    /* 6. Actividades mensuales dejadas de hacer */
-    const monthlyTasks = tasks.filter(t=> t.freq === "mensual");
-    const monthlyNeglected = monthlyTasks.map(t=> ({ t, missed: computeMissedCycles(t, today) })).filter(r=> r.missed >= 1).sort((a,b)=> b.missed - a.missed);
-    const monthlyList = document.getElementById("monthlyNeglectedList");
-    const monthlyEmpty = document.getElementById("monthlyNeglectedEmpty");
-    if (monthlyNeglected.length === 0){ monthlyList.innerHTML = ""; monthlyEmpty.hidden = false; }
-    else {
-      monthlyEmpty.hidden = true;
-      monthlyList.innerHTML = monthlyNeglected.map(r=> `
-        <div class="alert-item">
-          <div class="alert-main">
-            <div class="alert-name">${escapeHTML(r.t.name)}</div>
-            <div class="alert-detail">${r.missed} ${r.missed === 1 ? "mes" : "meses"} sin realizarse</div>
-          </div>
-          <span class="badge ${r.missed >= 2 ? 'badge-sev-alta' : 'badge-sev-media'}">${r.missed >= 2 ? 'Alta' : 'Media'}</span>
-        </div>`).join("");
-    }
-
-    /* 7. Alertas de procrastinación */
+    /* 7. Alertas */
+    const thresholds = { diaria:2, semanal:2, quincenal:1, mensual:1 };
     const alerts = [];
-    tasks.forEach(t=>{
+    tasks.forEach((t) => {
       if (t.freq === "una_vez"){
-        if (getCompletionDates(t.id).length === 0){
-          const age = daysBetween(t.start, today);
-          if (age >= 5) alerts.push({ name:t.name, detail:`Pendiente hace ${age} días desde su creación`, severity: age >= 15 ? "alta" : "media" });
+        if (!doneSet(t.id).size){
+          const es = toWd(dn(t.start));
+          const age = td > es ? wdCount(es, td) - 1 : 0;
+          if (age >= 5) alerts.push({ name:t.name, detail:`Pendiente hace ${age} días hábiles`, sev: age >= 15 ? "alta" : "media" });
         }
       } else {
-        const missed = computeMissedCycles(t, today);
-        const thresholds = { diaria:2, semanal:2, quincenal:1, mensual:1 };
-        const th = thresholds[t.freq];
+        const missed = computeMissedCycles(t, today), th = thresholds[t.freq];
         if (missed >= th){
-          const unit = t.freq === "diaria" ? (missed === 1 ? "día" : "días") : (missed === 1 ? "ciclo" : "ciclos");
-          alerts.push({ name:t.name, detail:`${missed} ${unit} seguidos sin cumplir (${FREQ[t.freq].label})`, severity: missed >= th*2 ? "alta" : "media" });
+          const unit = t.freq === "diaria" ? plural(missed, "día hábil", "días hábiles") : plural(missed, "ciclo", "ciclos");
+          alerts.push({ name:t.name, detail:`${missed} ${unit} ${plural(missed, "seguido", "seguidos")} sin cumplir (${FREQ[t.freq].label})`, sev: missed >= th * 2 ? "alta" : "media" });
         }
       }
     });
-    alerts.sort((a,b)=> (a.severity === "alta" ? 0 : 1) - (b.severity === "alta" ? 0 : 1));
+    alerts.sort((a, b) => (a.sev === "alta" ? 0 : 1) - (b.sev === "alta" ? 0 : 1));
+    $("#alertsEmpty").hidden = alerts.length > 0;
+    $("#alertsList").innerHTML = alerts.map((a) => `
+      <div class="alert-item">
+        <div class="alert-main">
+          <div class="alert-name">${esc(a.name)}</div>
+          <div class="alert-detail">${esc(a.detail)}</div>
+        </div>
+        <span class="badge ${a.sev === "alta" ? "badge-sev-alta" : "badge-sev-media"}">${a.sev === "alta" ? "Alta" : "Media"}</span>
+      </div>`).join("");
 
-    const alertsList = document.getElementById("alertsList");
-    const alertsEmpty = document.getElementById("alertsEmpty");
-    if (alerts.length === 0){ alertsList.innerHTML = ""; alertsEmpty.hidden = false; }
-    else {
-      alertsEmpty.hidden = true;
-      alertsList.innerHTML = alerts.map(a=> `
-        <div class="alert-item">
-          <div class="alert-main">
-            <div class="alert-name">${escapeHTML(a.name)}</div>
-            <div class="alert-detail">${escapeHTML(a.detail)}</div>
-          </div>
-          <span class="badge ${a.severity === 'alta' ? 'badge-sev-alta' : 'badge-sev-media'}">${a.severity === 'alta' ? 'Alta' : 'Media'}</span>
-        </div>`).join("");
-    }
-
-    /* 8. Antigüedad de tareas "una sola vez" pendientes */
-    const onceTasks = tasks.filter(t=> t.freq === "una_vez" && getCompletionDates(t.id).length === 0);
+    /* 8. Antigüedad de "una vez" pendientes (días hábiles) */
+    const once = tasks.filter((t) => t.freq === "una_vez" && !doneSet(t.id).size && toWd(dn(t.start)) <= td);
     const buckets = [
-      { label:"0 – 3 días",  min:0,  max:3 },
-      { label:"4 – 7 días",  min:4,  max:7 },
-      { label:"8 – 15 días", min:8,  max:15 },
-      { label:"16 – 30 días",min:16, max:30 },
-      { label:"Más de 30 días", min:31, max:Infinity }
+      { label:"0 – 3 días", min:0, max:3 }, { label:"4 – 5 días", min:4, max:5 },
+      { label:"6 – 10 días", min:6, max:10 }, { label:"11 – 22 días", min:11, max:22 },
+      { label:"Más de 22", min:23, max:Infinity }
     ];
-    const ageBucketsEl = document.getElementById("ageBuckets");
-    const ageEmpty = document.getElementById("ageEmpty");
-    if (onceTasks.length === 0){ ageBucketsEl.innerHTML = ""; ageEmpty.hidden = false; }
+    $("#ageEmpty").hidden = once.length > 0;
+    if (!once.length) $("#ageBuckets").innerHTML = "";
     else {
-      ageEmpty.hidden = true;
-      const counts = buckets.map(b=> onceTasks.filter(t=>{ const age = daysBetween(t.start, today); return age >= b.min && age <= b.max; }).length);
+      const ages = once.map((t) => { const es = toWd(dn(t.start)); return td > es ? wdCount(es, td) - 1 : 0; });
+      const counts = buckets.map((b) => ages.filter((a) => a >= b.min && a <= b.max).length);
       const max = Math.max(...counts, 1);
-      ageBucketsEl.innerHTML = buckets.map((b,i)=> `
+      $("#ageBuckets").innerHTML = buckets.map((b, i) => `
         <div class="age-bucket-row">
           <div class="bucket-label">${b.label}</div>
-          <div class="bar-track"><div class="bar-fill ${i>=3?'low':(i>=1?'mid':'')}" style="width:${(counts[i]/max)*100}%"></div></div>
+          <div class="bar-track"><div class="bar-fill ${i >= 3 ? "low" : i >= 1 ? "mid" : ""}" style="width:${counts[i] / max * 100}%"></div></div>
           <div class="bucket-count">${counts[i]}</div>
         </div>`).join("");
     }
   }
 
-  /* ---------------------------------------------------------
-     Helpers
-  --------------------------------------------------------- */
-  function escapeHTML(str){
-    const div = document.createElement("div");
-    div.textContent = str;
-    return div.innerHTML;
-  }
-
-  /* ---------------------------------------------------------
-     Init & carga de datos desde Firebase
-  --------------------------------------------------------- */
-  async function iniciarAplicacion(){
-    showToast("Cargando datos...");
-    try{
-      const tasksSnap = await getDocs(collection(db, "tasks"));
-      tasks = tasksSnap.docs.map(d=> d.data());
-
-      const compSnap = await getDocs(collection(db, "completions"));
-      completions = {};
-      compSnap.docs.forEach(d=>{ completions[d.id] = true; });
-
-      renderRegistry();
-      renderChecklist();
-    }catch(err){
-      console.error("Error al cargar datos desde Firebase:", err);
-      showToast("Error de conexión. Revisa la consola.");
-      renderRegistry();
-      renderChecklist();
+  /* =========================================================
+     Atajos de teclado
+  ========================================================= */
+  document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (addDialog.open) return;                         // la ventana maneja su propio teclado (Esc cierra)
+    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
+    if (e.key === "Escape"){ if (typing) e.target.blur(); return; }
+    if (typing) return;
+    switch (e.key){
+      case "1": goToView("checklist"); break;
+      case "2": goToView("actividades"); break;
+      case "3": goToView("dashboard"); break;
+      case "n": case "N": case "+": e.preventDefault(); openAdd(); break;
+      case "/": e.preventDefault(); goToView("checklist"); requestAnimationFrame(() => taskSearchInput.focus()); break;
+      case "t": case "T": state.viewDate = state.today; scheduleRender(); break;
+      case "ArrowLeft": if (state.view === "checklist") shiftDay(-1); break;
+      case "ArrowRight": if (state.view === "checklist") shiftDay(1); break;
     }
-  }
+  });
 
-  iniciarAplicacion();
-</script>
+  /* =========================================================
+     Datos en tiempo real
+  ========================================================= */
+  onSnapshot(collection(db, "tasks"), { includeMetadataChanges:true }, (snap) => {
+    state.pending.tasks = snap.metadata.hasPendingWrites;
+    if (snap.docChanges().length || !state.loaded.tasks){
+      state.tasks = snap.docs.map((d) => {
+        const t = { ...d.data(), id: d.id };
+        if (!t.start) t.start = String(t.createdAt || todayISO()).slice(0,10);
+        return t;
+      }).filter((t) => FREQ[t.freq] && t.name)
+        .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+      state.loaded.tasks = true;
+      if (state.editingId && !state.tasks.some((t) => t.id === state.editingId)) exitEditMode(true);
+      scheduleRender();
+    } else renderSync();
+  }, (err) => {
+    console.error("Error al leer actividades:", err);
+    state.loaded.tasks = true;
+    showToast("No se pudieron cargar las actividades. Revisa la conexión o las reglas de Firestore.", { type:"error", duration:6000 });
+    scheduleRender();
+  });
 
-<script>
-  // Registro del Service Worker (habilita el uso sin conexión del "app shell")
-  if ("serviceWorker" in navigator){
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js")
-        .catch((err) => console.error("Error registrando el Service Worker:", err));
+  onSnapshot(collection(db, "completions"), { includeMetadataChanges:true }, (snap) => {
+    state.pending.comps = snap.metadata.hasPendingWrites;
+    const changes = snap.docChanges();
+    changes.forEach((ch) => {
+      const sep = ch.doc.id.lastIndexOf("|");
+      if (sep < 0) return;
+      const taskId = ch.doc.id.slice(0, sep), iso = ch.doc.id.slice(sep + 1);
+      if (ch.type === "removed"){
+        const s = state.compIndex.get(taskId);
+        if (s){ s.delete(iso); if (!s.size) state.compIndex.delete(taskId); }
+      } else if (ch.doc.data().completado !== false){
+        let s = state.compIndex.get(taskId);
+        if (!s){ s = new Set(); state.compIndex.set(taskId, s); }
+        s.add(iso);
+      }
     });
-  }
-
-  // Botón "Instalar app" (evento estándar de instalación de PWA en Chrome/Edge/Android)
-  let deferredInstallPrompt = null;
-  const installBtn = document.getElementById("installBtn");
-
-  window.addEventListener("beforeinstallprompt", (event) => {
-    event.preventDefault();
-    deferredInstallPrompt = event;
-    installBtn.hidden = false;
+    if (changes.length || !state.loaded.comps){
+      state.loaded.comps = true;
+      scheduleRender();
+    } else renderSync();
+  }, (err) => {
+    console.error("Error al leer cumplimientos:", err);
+    state.loaded.comps = true;
+    showToast("No se pudo cargar el historial de cumplimiento.", { type:"error", duration:6000 });
+    scheduleRender();
   });
 
-  installBtn.addEventListener("click", async () => {
-    if (!deferredInstallPrompt) return;
-    installBtn.hidden = true;
-    deferredInstallPrompt.prompt();
-    await deferredInstallPrompt.userChoice;
-    deferredInstallPrompt = null;
-  });
-
-  window.addEventListener("appinstalled", () => {
-    installBtn.hidden = true;
-    deferredInstallPrompt = null;
-  });
+  /* =========================================================
+     Inicio
+  ========================================================= */
+  tickClock();
+  setInterval(tickClock, 30000);
+  updatePreview();
+  updateNotesCount();
+  goToView(location.hash.slice(1) || "checklist");
 </script>
 </body>
 </html>
